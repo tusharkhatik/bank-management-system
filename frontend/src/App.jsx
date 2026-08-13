@@ -11,99 +11,124 @@ import Transfer from "./pages/Transfer";
 import Transactions from "./pages/Transactions";
 import Admin from "./pages/Admin";
 
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
+function AppLayout({ children }) {
+  return (
+    <>
+      <Navbar />
+      {children}
+    </>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* Login */}
         <Route path="/" element={<Login />} />
 
-        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
-            <>
-              <Navbar />
-              <Dashboard />
-            </>
+            <ProtectedRoute>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
-        {/* Banking */}
         <Route
           path="/customers"
           element={
-            <>
-              <Navbar />
-              <Customers />
-            </>
+            <ProtectedRoute>
+              <AppLayout>
+                <Customers />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/accounts"
           element={
-            <>
-              <Navbar />
-              <Accounts />
-            </>
+            <ProtectedRoute>
+              <AppLayout>
+                <Accounts />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/deposit"
           element={
-            <>
-              <Navbar />
-              <Deposit />
-            </>
+            <ProtectedRoute>
+              <AppLayout>
+                <Deposit />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/withdraw"
           element={
-            <>
-              <Navbar />
-              <Withdraw />
-            </>
+            <ProtectedRoute>
+              <AppLayout>
+                <Withdraw />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/transfer"
           element={
-            <>
-              <Navbar />
-              <Transfer />
-            </>
+            <ProtectedRoute>
+              <AppLayout>
+                <Transfer />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
         <Route
           path="/transactions"
           element={
-            <>
-              <Navbar />
-              <Transactions />
-            </>
+            <ProtectedRoute>
+              <AppLayout>
+                <Transactions />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
-        {/* Admin */}
         <Route
           path="/admin"
           element={
-            <>
-              <Navbar />
-              <Admin />
-            </>
+            <ProtectedRoute>
+              <AppLayout>
+                <Admin />
+              </AppLayout>
+            </ProtectedRoute>
           }
         />
 
-        {/* Invalid URL */}
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route
+          path="*"
+          element={<Navigate to="/" replace />}
+        />
 
       </Routes>
     </BrowserRouter>

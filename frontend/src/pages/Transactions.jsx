@@ -51,7 +51,9 @@ function Transactions() {
 
             <p>
               <strong>Date:</strong>{" "}
-              {transaction.createdAt || "N/A"}
+              {transaction.timestamp
+  ? new Date(transaction.timestamp).toLocaleString()
+  : "N/A"}
             </p>
 
             <hr />
