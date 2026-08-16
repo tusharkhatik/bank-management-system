@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Navbar from "./components/Navbar";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+
+import Layout from "./components/Layout";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -14,125 +15,100 @@ import Admin from "./pages/Admin";
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
 
-  if (!token) {
-    return <Navigate to="/" replace />;
-  }
-
-  return children;
+  return token ? children : <Navigate to="/" replace />;
 }
 
-function AppLayout({ children }) {
+function ProtectedLayout({ children }) {
   return (
-    <>
-      <Navbar />
-      {children}
-    </>
+    <ProtectedRoute>
+      <Layout>{children}</Layout>
+    </ProtectedRoute>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-
         <Route path="/" element={<Login />} />
 
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Dashboard />
+            </ProtectedLayout>
           }
         />
 
         <Route
           path="/customers"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Customers />
-              </AppLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Customers />
+            </ProtectedLayout>
           }
         />
 
         <Route
           path="/accounts"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Accounts />
-              </AppLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Accounts />
+            </ProtectedLayout>
           }
         />
 
         <Route
           path="/deposit"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Deposit />
-              </AppLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Deposit />
+            </ProtectedLayout>
           }
         />
 
         <Route
           path="/withdraw"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Withdraw />
-              </AppLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Withdraw />
+            </ProtectedLayout>
           }
         />
 
         <Route
           path="/transfer"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Transfer />
-              </AppLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Transfer />
+            </ProtectedLayout>
           }
         />
 
         <Route
           path="/transactions"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Transactions />
-              </AppLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Transactions />
+            </ProtectedLayout>
           }
         />
 
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Admin />
-              </AppLayout>
-            </ProtectedRoute>
+            <ProtectedLayout>
+              <Admin />
+            </ProtectedLayout>
           }
         />
 
         <Route
           path="*"
-          element={<Navigate to="/" replace />}
+          element={<Navigate to="/dashboard" replace />}
         />
-
       </Routes>
     </BrowserRouter>
   );
 }
-
-export default App;
