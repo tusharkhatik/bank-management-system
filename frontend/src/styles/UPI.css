@@ -1,0 +1,120 @@
+.upi-page {
+  padding: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.upi-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.upi-eyebrow {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 1.5px;
+  color: #64748b;
+  margin-bottom: 8px !important;
+}
+
+.upi-title {
+  font-size: 32px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.8px;
+  color: #0f172a;
+}
+
+.upi-subtitle {
+  margin-top: 8px !important;
+  color: #64748b;
+  font-size: 15px !important;
+}
+
+.upi-card {
+  height: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px !important;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06) !important;
+}
+
+.upi-card-title {
+  font-size: 20px !important;
+  font-weight: 750 !important;
+  color: #0f172a;
+}
+
+.upi-card-description {
+  margin-top: 6px !important;
+  color: #64748b;
+  font-size: 14px !important;
+}
+
+.upi-primary-button {
+  min-height: 48px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  border-radius: 10px !important;
+}
+
+.upi-search-card {
+  height: auto;
+}
+
+.upi-profile-card {
+  margin-top: 24px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px !important;
+  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.08) !important;
+}
+
+.profile-label {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.3px;
+  color: #64748b;
+}
+
+.profile-upi-id {
+  margin-top: 8px !important;
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  color: #1d4ed8;
+  word-break: break-word;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eef2f7;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.profile-row:last-child {
+  border-bottom: none;
+}
+
+.profile-row strong {
+  color: #0f172a;
+  text-align: right;
+}
+
+@media (max-width: 700px) {
+  .upi-page {
+    padding: 20px;
+  }
+
+  .upi-header {
+    flex-direction: column;
+  }
+
+  .upi-title {
+    font-size: 27px !important;
+  }
+}

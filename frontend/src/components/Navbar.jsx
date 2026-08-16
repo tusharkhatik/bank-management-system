@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import QrCode2OutlinedIcon from "@mui/icons-material/QrCode2Outlined";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 
 import {
   AppBar,
@@ -66,6 +68,16 @@ function Navbar() {
       path: "/transfer",
       icon: <SwapHorizIcon fontSize="small" />,
     },
+    {
+  label: "UPI",
+  path: "/upi",
+  icon: <PaymentsOutlinedIcon fontSize="small" />,
+},
+{
+  label: "Scan & Pay",
+  path: "/scan-pay",
+  icon: <QrCode2OutlinedIcon fontSize="small" />,
+},
     {
       label: "Transactions",
       path: "/transactions",

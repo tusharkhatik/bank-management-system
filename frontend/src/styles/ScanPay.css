@@ -1,0 +1,701 @@
+.scan-pay-page {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 32px 36px 60px;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.scan-pay-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.scan-pay-eyebrow {
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.8px !important;
+  color: #526b8d !important;
+  margin-bottom: 8px !important;
+}
+
+.scan-pay-title {
+  font-size: 42px !important;
+  line-height: 1.08 !important;
+  font-weight: 800 !important;
+  letter-spacing: -1px !important;
+  color: #0b1933 !important;
+}
+
+.scan-pay-subtitle {
+  margin-top: 12px !important;
+  font-size: 16px !important;
+  line-height: 1.6 !important;
+  color: #60738f !important;
+  max-width: 760px;
+}
+
+.scan-pay-header-badge {
+  min-width: 76px;
+  height: 76px;
+  border-radius: 20px;
+  border: 1px solid #dce5f0;
+  background: #f8fbff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #0b1933;
+  flex-shrink: 0;
+}
+
+.scan-pay-header-badge svg {
+  font-size: 32px;
+  margin-bottom: 2px;
+}
+
+.scan-pay-header-badge p {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+/* =========================================================
+   SECURITY BANNER
+   ========================================================= */
+
+.security-banner {
+  margin-bottom: 28px;
+  padding: 16px 20px;
+  border: 1px solid #dce6f1 !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #f8fbff !important;
+}
+
+.security-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eaf3ff;
+  color: #2463b3;
+  flex-shrink: 0;
+}
+
+.security-icon svg {
+  font-size: 22px;
+}
+
+.security-title {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #172033 !important;
+}
+
+.security-text {
+  font-size: 13px !important;
+  color: #657894 !important;
+  margin-top: 2px !important;
+}
+
+.protected-chip {
+  margin-left: auto;
+  font-weight: 700 !important;
+}
+
+/* =========================================================
+   GRID
+   ========================================================= */
+
+.scan-pay-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(360px, 0.85fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.scan-pay-left {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* =========================================================
+   CARDS
+   ========================================================= */
+
+.scan-pay-card {
+  border: 1px solid #dce5ef !important;
+  border-radius: 20px !important;
+  box-shadow: 0 12px 35px rgba(20, 42, 74, 0.06) !important;
+  background: #ffffff !important;
+  overflow: hidden;
+}
+
+.scan-pay-card .MuiCardContent-root {
+  padding: 26px !important;
+}
+
+/* =========================================================
+   CARD HEADER
+   ========================================================= */
+
+.card-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.section-eyebrow {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.5px !important;
+  color: #607a9c !important;
+  margin-bottom: 6px !important;
+}
+
+.section-title {
+  font-size: 24px !important;
+  line-height: 1.2 !important;
+  font-weight: 800 !important;
+  color: #0b1933 !important;
+}
+
+.section-description {
+  margin-top: 7px !important;
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+  color: #687b96 !important;
+}
+
+.section-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f2f6fb;
+  color: #19385f;
+  flex-shrink: 0;
+}
+
+.section-icon-box svg {
+  font-size: 25px;
+}
+
+/* =========================================================
+   MY QR
+   ========================================================= */
+
+.qr-display-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0 10px;
+}
+
+.generated-qr-wrapper {
+  width: 280px;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid #dce5ef;
+  border-radius: 22px;
+  box-shadow: 0 14px 38px rgba(19, 42, 72, 0.09);
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+.generated-qr-wrapper svg {
+  display: block;
+  width: 240px;
+  height: 240px;
+}
+
+.qr-upi-id {
+  margin-top: 16px !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: #172033 !important;
+  word-break: break-all;
+  text-align: center;
+}
+
+.qr-helper-text {
+  margin-top: 5px !important;
+  font-size: 12px !important;
+  color: #788aa3 !important;
+  text-align: center;
+}
+
+.qr-actions {
+  margin-top: 22px;
+}
+
+.qr-actions button {
+  min-height: 44px;
+  border-radius: 10px;
+  text-transform: none;
+  font-weight: 700;
+}
+
+.qr-amount-box {
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e5ebf2;
+}
+
+.qr-amount-title {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #172033 !important;
+}
+
+.qr-amount-description {
+  font-size: 12px !important;
+  color: #73839a !important;
+  margin-top: 3px !important;
+}
+
+/* =========================================================
+   SCANNER
+   ========================================================= */
+
+.qr-reader {
+  width: 100%;
+  min-height: 330px;
+  border: 1px dashed #cbd7e5;
+  border-radius: 18px;
+  background: #f8fafc;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-reader-active {
+  border-style: solid;
+  border-color: #a9bdd6;
+  background: #0d1726;
+}
+
+.qr-reader video {
+  width: 100% !important;
+  max-height: 430px !important;
+  object-fit: cover !important;
+  border-radius: 16px;
+}
+
+.qr-reader img {
+  display: none !important;
+}
+
+.qr-reader__scan_region {
+  border: none !important;
+}
+
+.scanner-placeholder {
+  padding: 40px 24px;
+  text-align: center;
+  max-width: 360px;
+}
+
+.scanner-placeholder-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #edf4fc;
+  color: #244d7d;
+}
+
+.scanner-placeholder-icon svg {
+  font-size: 30px;
+}
+
+.scanner-placeholder-title {
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: #1c2b40 !important;
+}
+
+.scanner-placeholder-text {
+  margin-top: 7px !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  color: #74849a !important;
+}
+
+/* =========================================================
+   PAYMENT
+   ========================================================= */
+
+.payment-card {
+  position: sticky;
+  top: 24px;
+}
+
+.payment-card .MuiTextField-root {
+  background: #ffffff;
+}
+
+.payment-card .MuiOutlinedInput-root {
+  border-radius: 11px;
+}
+
+.payment-card .MuiInputLabel-root {
+  color: #687b94;
+}
+
+.payment-card button {
+  border-radius: 11px;
+  text-transform: none;
+  font-weight: 700;
+}
+
+.pay-button {
+  min-height: 52px !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+/* =========================================================
+   RECEIVER
+   ========================================================= */
+
+.receiver-box {
+  padding: 17px;
+  border: 1px solid #cfe5d7;
+  border-radius: 14px;
+  background: #f6fcf8;
+}
+
+.receiver-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.receiver-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #dff3e5;
+  color: #18733b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.receiver-label {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.1px !important;
+  color: #23804a !important;
+}
+
+.receiver-name {
+  margin-top: 2px !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: #1c3024 !important;
+}
+
+.receiver-upi {
+  margin-top: 2px !important;
+  font-size: 12px !important;
+  color: #668071 !important;
+  word-break: break-all;
+}
+
+.receiver-verified-icon {
+  margin-left: auto;
+  color: #24904f !important;
+}
+
+.receiver-account-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #4f6d5b;
+}
+
+.receiver-account-row svg {
+  font-size: 21px;
+}
+
+.receiver-account-label {
+  font-size: 11px !important;
+  color: #718477 !important;
+}
+
+.receiver-account {
+  margin-top: 1px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #304739 !important;
+}
+
+/* =========================================================
+   PAYMENT SUMMARY
+   ========================================================= */
+
+.payment-summary {
+  padding: 17px;
+  border: 1px solid #e0e7ef;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.summary-title {
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #1b2a3e !important;
+  margin-bottom: 13px !important;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 9px;
+}
+
+.summary-row > p:first-child {
+  font-size: 12px !important;
+  color: #7a899c !important;
+}
+
+.summary-value {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #25364c !important;
+  text-align: right;
+  word-break: break-all;
+}
+
+.summary-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-total p:first-child {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #53657c !important;
+}
+
+.summary-total p:last-child {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  color: #0d203d !important;
+}
+
+/* =========================================================
+   SUCCESS
+   ========================================================= */
+
+.payment-success-card {
+  margin-top: 28px;
+  border: 1px solid #cce6d5 !important;
+  border-radius: 20px !important;
+  box-shadow: 0 12px 35px rgba(29, 102, 53, 0.07) !important;
+  background: #ffffff !important;
+}
+
+.success-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.success-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  background: #e6f7eb;
+  color: #248b4b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.success-icon svg {
+  font-size: 30px;
+}
+
+.success-title {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  color: #173623 !important;
+}
+
+.success-subtitle {
+  margin-top: 3px !important;
+  font-size: 13px !important;
+  color: #6d8373 !important;
+}
+
+.success-amount {
+  text-align: center;
+  font-size: 42px;
+  font-weight: 800;
+  color: #168142;
+  letter-spacing: -1px;
+}
+
+.success-recipient {
+  margin-top: 5px !important;
+  text-align: center;
+  color: #687b71 !important;
+  font-size: 14px !important;
+}
+
+.success-details {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.success-details > div {
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8faf9;
+  border: 1px solid #e3ece6;
+}
+
+.success-details p {
+  font-size: 11px !important;
+  color: #7a8c80 !important;
+  margin-bottom: 5px !important;
+}
+
+.success-details strong {
+  display: block;
+  font-size: 12px;
+  color: #294133;
+  word-break: break-word;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+  .scan-pay-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-card {
+    position: static;
+  }
+
+  .success-details {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .scan-pay-page {
+    padding: 22px 16px 40px;
+  }
+
+  .scan-pay-header {
+    align-items: flex-start;
+  }
+
+  .scan-pay-title {
+    font-size: 34px !important;
+  }
+
+  .scan-pay-header-badge {
+    display: none;
+  }
+
+  .security-banner {
+    align-items: flex-start;
+  }
+
+  .protected-chip {
+    display: none;
+  }
+
+  .scan-pay-card .MuiCardContent-root {
+    padding: 20px !important;
+  }
+
+  .section-title {
+    font-size: 21px !important;
+  }
+
+  .generated-qr-wrapper {
+    width: 245px;
+    height: 245px;
+  }
+
+  .generated-qr-wrapper svg {
+    width: 210px;
+    height: 210px;
+  }
+
+  .qr-reader {
+    min-height: 270px;
+  }
+
+  .success-details {
+    grid-template-columns: 1fr;
+  }
+
+  .success-amount {
+    font-size: 34px;
+  }
+}
+
+@media (max-width: 480px) {
+  .scan-pay-title {
+    font-size: 30px !important;
+  }
+
+  .scan-pay-subtitle {
+    font-size: 14px !important;
+  }
+
+  .generated-qr-wrapper {
+    width: 220px;
+    height: 220px;
+  }
+
+  .generated-qr-wrapper svg {
+    width: 190px;
+    height: 190px;
+  }
+}

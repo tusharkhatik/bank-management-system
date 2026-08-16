@@ -11,6 +11,8 @@ import Withdraw from "./pages/Withdraw";
 import Transfer from "./pages/Transfer";
 import Transactions from "./pages/Transactions";
 import Admin from "./pages/Admin";
+import UPI from "./pages/UPI";
+import ScanPay from "./pages/ScanPay";
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -30,8 +32,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+
+        {/* Login */}
         <Route path="/" element={<Login />} />
 
+        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -41,6 +46,7 @@ export default function App() {
           }
         />
 
+        {/* Customers */}
         <Route
           path="/customers"
           element={
@@ -50,6 +56,7 @@ export default function App() {
           }
         />
 
+        {/* Accounts */}
         <Route
           path="/accounts"
           element={
@@ -59,6 +66,7 @@ export default function App() {
           }
         />
 
+        {/* Deposit */}
         <Route
           path="/deposit"
           element={
@@ -68,6 +76,7 @@ export default function App() {
           }
         />
 
+        {/* Withdraw */}
         <Route
           path="/withdraw"
           element={
@@ -77,6 +86,7 @@ export default function App() {
           }
         />
 
+        {/* Transfer */}
         <Route
           path="/transfer"
           element={
@@ -86,6 +96,27 @@ export default function App() {
           }
         />
 
+        {/* UPI */}
+        <Route
+          path="/upi"
+          element={
+            <ProtectedLayout>
+              <UPI />
+            </ProtectedLayout>
+          }
+        />
+
+        {/* Scan & Pay */}
+        <Route
+          path="/scan-pay"
+          element={
+            <ProtectedLayout>
+              <ScanPay />
+            </ProtectedLayout>
+          }
+        />
+
+        {/* Transactions */}
         <Route
           path="/transactions"
           element={
@@ -95,6 +126,7 @@ export default function App() {
           }
         />
 
+        {/* Admin */}
         <Route
           path="/admin"
           element={
@@ -104,10 +136,12 @@ export default function App() {
           }
         />
 
+        {/* Unknown routes */}
         <Route
           path="*"
           element={<Navigate to="/dashboard" replace />}
         />
+
       </Routes>
     </BrowserRouter>
   );
