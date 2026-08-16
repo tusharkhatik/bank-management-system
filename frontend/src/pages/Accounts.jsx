@@ -1,5 +1,92 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  AccountBalance,
+  AccountBalanceWallet,
+  Add,
+  ArrowUpward,
+  CheckCircle,
+  Close,
+  ContentCopy,
+  Delete,
+  Edit,
+  Error,
+  People,
+  Refresh,
+  Search,
+  TrendingUp,
+} from "@mui/icons-material";
+
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  InputAdornment,
+  LinearProgress,
+  Paper,
+  Snackbar,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+
 import api from "../services/api";
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const formatCurrency = (value) => {
+  const number = Number(value || 0);
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number);
+};
+
+const getCustomerId = (account) => {
+  return (
+    account?.customer?.id ??
+    account?.customerId ??
+    null
+  );
+};
+
+const getCustomerName = (account) => {
+  return (
+    account?.customer?.name ||
+    account?.customer?.fullName ||
+    account?.customerName ||
+    "N/A"
+  );
+};
+
+const getCustomerEmail = (account) => {
+  return (
+    account?.customer?.email ||
+    account?.customerEmail ||
+    "N/A"
+  );
+};
+
+/* =========================================================
+   ACCOUNTS
+========================================================= */
 
 function Accounts() {
   const [accounts, setAccounts] = useState([]);
@@ -12,8 +99,33 @@ function Accounts() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const [search, setSearch] = useState("");
+
+  const [deleteDialogOpen, setDeleteDialogOpen] =
+    useState(false);
+
+  const [accountToDelete, setAccountToDelete] =
+    useState(null);
+
+  const [detailsOpen, setDetailsOpen] =
+    useState(false);
+
+  const [selectedAccount, setSelectedAccount] =
+    useState(null);
+
+  const [toast, setToast] = useState({
+    open: false,
+    type: "success",
+    message: "",
+  });
+
+  /* =======================================================
+     LOAD ACCOUNTS
+  ======================================================= */
 
   useEffect(() => {
     loadAccounts();
@@ -25,18 +137,43 @@ function Accounts() {
 
     try {
       const response = await api.get("/accounts");
-      setAccounts(response.data || []);
+
+      const data = Array.isArray(response.data)
+        ? response.data
+        : [];
+
+      setAccounts(data);
     } catch (err) {
-      console.error("Failed to load accounts:", err);
+      console.error(
+        "Failed to load accounts:",
+        err
+      );
 
       setError(
-        err.response?.data?.message ||
-        "Failed to load accounts. Please try again."
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to load accounts. Please try again."
       );
     } finally {
       setLoading(false);
     }
   };
+
+  /* =======================================================
+     TOAST
+  ======================================================= */
+
+  const showToast = (type, message) => {
+    setToast({
+      open: true,
+      type,
+      message,
+    });
+  };
+
+  /* =======================================================
+     RESET FORM
+  ======================================================= */
 
   const resetForm = () => {
     setAccountNumber("");
@@ -45,16 +182,32 @@ function Accounts() {
     setEditingId(null);
   };
 
+  /* =======================================================
+     VALIDATION
+  ======================================================= */
+
   const validateForm = () => {
-    if (!accountNumber.trim() || accountNumber.trim().length < 3) {
-      setError("Account number must be at least 3 characters.");
+    if (
+      !accountNumber.trim() ||
+      accountNumber.trim().length < 3
+    ) {
+      setError(
+        "Account number must be at least 3 characters."
+      );
+
       return false;
     }
 
     const parsedBalance = Number(balance);
 
-    if (Number.isNaN(parsedBalance) || parsedBalance < 0) {
-      setError("Balance must be a non-negative number.");
+    if (
+      Number.isNaN(parsedBalance) ||
+      parsedBalance < 0
+    ) {
+      setError(
+        "Balance must be a non-negative number."
+      );
+
       return false;
     }
 
@@ -65,15 +218,22 @@ function Accounts() {
       !Number.isInteger(parsedCustomer) ||
       parsedCustomer <= 0
     ) {
-      setError("Customer ID must be a positive integer.");
+      setError(
+        "Customer ID must be a positive integer."
+      );
+
       return false;
     }
 
     return true;
   };
 
-  const handleCreateAccount = async (e) => {
-    e.preventDefault();
+  /* =======================================================
+     CREATE
+  ======================================================= */
+
+  const handleCreateAccount = async (event) => {
+    event.preventDefault();
 
     setError("");
     setMessage("");
@@ -91,33 +251,62 @@ function Accounts() {
         customerId: Number(customerId),
       };
 
-      const response = await api.post("/accounts", payload);
+      const response = await api.post(
+        "/accounts",
+        payload
+      );
 
-      setAccounts((prev) => [...prev, response.data]);
-
-      setMessage("Account created successfully!");
+      setAccounts((previous) => [
+        ...previous,
+        response.data,
+      ]);
 
       resetForm();
-    } catch (err) {
-      console.error("Failed to create account:", err);
 
-      setError(
-        err.response?.data?.message ||
-        "Failed to create account."
+      setMessage(
+        "Account created successfully."
       );
+
+      showToast(
+        "success",
+        "Account created successfully."
+      );
+    } catch (err) {
+      console.error(
+        "Failed to create account:",
+        err
+      );
+
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to create account.";
+
+      setError(errorMessage);
+
+      showToast("error", errorMessage);
     } finally {
       setSubmitting(false);
     }
   };
 
+  /* =======================================================
+     EDIT
+  ======================================================= */
+
   const handleEdit = (account) => {
     setEditingId(account.id);
 
-    setAccountNumber(account.accountNumber || "");
-    setBalance(String(account.balance ?? ""));
+    setAccountNumber(
+      account.accountNumber || ""
+    );
+
+    setBalance(
+      String(account.balance ?? "")
+    );
 
     setCustomerId(
-      String(account.customer?.id ?? account.customerId ?? "")
+      String(getCustomerId(account) ?? "")
     );
 
     setMessage("");
@@ -129,8 +318,12 @@ function Accounts() {
     });
   };
 
-  const handleUpdateAccount = async (e) => {
-    e.preventDefault();
+  /* =======================================================
+     UPDATE
+  ======================================================= */
+
+  const handleUpdateAccount = async (event) => {
+    event.preventDefault();
 
     setError("");
     setMessage("");
@@ -155,28 +348,46 @@ function Accounts() {
         payload
       );
 
-      setAccounts((prev) =>
-        prev.map((account) =>
+      setAccounts((previous) =>
+        previous.map((account) =>
           account.id === editingId
             ? response.data
             : account
         )
       );
 
-      setMessage("Account updated successfully!");
-
       resetForm();
-    } catch (err) {
-      console.error("Failed to update account:", err);
 
-      setError(
-        err.response?.data?.message ||
-        "Failed to update account."
+      setMessage(
+        "Account updated successfully."
       );
+
+      showToast(
+        "success",
+        "Account updated successfully."
+      );
+    } catch (err) {
+      console.error(
+        "Failed to update account:",
+        err
+      );
+
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to update account.";
+
+      setError(errorMessage);
+
+      showToast("error", errorMessage);
     } finally {
       setSubmitting(false);
     }
   };
+
+  /* =======================================================
+     CANCEL EDIT
+  ======================================================= */
 
   const handleCancelEdit = () => {
     resetForm();
@@ -184,223 +395,1797 @@ function Accounts() {
     setMessage("");
   };
 
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this account?"
-    );
+  /* =======================================================
+     DELETE
+  ======================================================= */
 
-    if (!confirmed) {
+  const openDeleteDialog = (account) => {
+    setAccountToDelete(account);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    if (submitting) {
       return;
     }
 
-    const previousAccounts = accounts;
+    setDeleteDialogOpen(false);
+    setAccountToDelete(null);
+  };
 
-    setAccounts((prev) =>
-      prev.filter((account) => account.id !== id)
-    );
+  const handleDelete = async () => {
+    if (!accountToDelete?.id) {
+      return;
+    }
 
+    setSubmitting(true);
     setError("");
     setMessage("");
 
-    try {
-      await api.delete(`/accounts/${id}`);
+    const previousAccounts = accounts;
 
-      setMessage("Account deleted successfully!");
+    setAccounts((previous) =>
+      previous.filter(
+        (account) =>
+          account.id !== accountToDelete.id
+      )
+    );
+
+    try {
+      await api.delete(
+        `/accounts/${accountToDelete.id}`
+      );
+
+      setDeleteDialogOpen(false);
+      setAccountToDelete(null);
+
+      showToast(
+        "success",
+        "Account deleted successfully."
+      );
+
+      setMessage(
+        "Account deleted successfully."
+      );
     } catch (err) {
-      console.error("Failed to delete account:", err);
+      console.error(
+        "Failed to delete account:",
+        err
+      );
 
       setAccounts(previousAccounts);
 
-      setError(
-        err.response?.data?.message ||
-        "Failed to delete account."
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to delete account.";
+
+      setError(errorMessage);
+
+      showToast("error", errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /* =======================================================
+     SEARCH
+  ======================================================= */
+
+  const filteredAccounts = useMemo(() => {
+    const query = search
+      .trim()
+      .toLowerCase();
+
+    if (!query) {
+      return accounts;
+    }
+
+    return accounts.filter((account) => {
+      const accountNumber = String(
+        account.accountNumber || ""
+      ).toLowerCase();
+
+      const customerName = String(
+        getCustomerName(account)
+      ).toLowerCase();
+
+      const customerEmail = String(
+        getCustomerEmail(account)
+      ).toLowerCase();
+
+      const customer = String(
+        getCustomerId(account) || ""
+      ).toLowerCase();
+
+      return (
+        accountNumber.includes(query) ||
+        customerName.includes(query) ||
+        customerEmail.includes(query) ||
+        customer.includes(query)
+      );
+    });
+  }, [accounts, search]);
+
+  /* =======================================================
+     STATISTICS
+  ======================================================= */
+
+  const totalBalance = useMemo(() => {
+    return accounts.reduce(
+      (total, account) =>
+        total + Number(account.balance || 0),
+      0
+    );
+  }, [accounts]);
+
+  const averageBalance =
+    accounts.length > 0
+      ? totalBalance / accounts.length
+      : 0;
+
+  /* =======================================================
+     VIEW DETAILS
+  ======================================================= */
+
+  const handleViewDetails = (account) => {
+    setSelectedAccount(account);
+    setDetailsOpen(true);
+  };
+
+  /* =======================================================
+     COPY ACCOUNT NUMBER
+  ======================================================= */
+
+  const copyAccountNumber = async (number) => {
+    if (!number) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        String(number)
+      );
+
+      showToast(
+        "success",
+        "Account number copied."
+      );
+    } catch {
+      showToast(
+        "error",
+        "Unable to copy account number."
       );
     }
   };
 
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
   if (loading) {
     return (
-      <div style={{ padding: 30 }}>
-        <h2>Loading accounts...</h2>
-      </div>
+      <Box
+        sx={{
+          minHeight: "100vh",
+          bgcolor: "#f4f6f9",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          p: 3,
+        }}
+      >
+        <Card
+          sx={{
+            width: "100%",
+            maxWidth: 420,
+            borderRadius: 3,
+            border: "1px solid #e4e7ec",
+          }}
+        >
+          <CardContent
+            sx={{
+              p: 4,
+              textAlign: "center",
+            }}
+          >
+            <CircularProgress
+              size={38}
+              thickness={4}
+            />
+
+            <Typography
+              sx={{
+                mt: 2,
+                fontWeight: 800,
+                color: "#101828",
+              }}
+            >
+              Loading accounts
+            </Typography>
+
+            <Typography
+              variant="body2"
+              sx={{
+                mt: 0.5,
+                color: "#667085",
+              }}
+            >
+              Fetching account information...
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
     );
   }
 
-  return (
-    <div style={{ padding: 30 }}>
-      <h1>Accounts</h1>
+  /* =======================================================
+     RENDER
+  ======================================================= */
 
-      <div
-        style={{
-          maxWidth: 700,
-          padding: 20,
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          marginBottom: 30,
+  return (
+    <Box
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "#f4f6f9",
+        px: {
+          xs: 1.5,
+          sm: 2.5,
+          md: 4,
+        },
+        py: {
+          xs: 2,
+          sm: 3,
+          md: 4,
+        },
+      }}
+    >
+      {/* =================================================
+          HEADER
+      ================================================= */}
+
+      <Box
+        sx={{
+          maxWidth: 1380,
+          mx: "auto",
         }}
       >
-        <h2>
-          {editingId ? "Edit Account" : "Create Account"}
-        </h2>
-
-        <form
-          onSubmit={
-            editingId
-              ? handleUpdateAccount
-              : handleCreateAccount
-          }
+        <Stack
+          direction={{
+            xs: "column",
+            md: "row",
+          }}
+          spacing={2}
+          sx={{
+            mb: 3,
+          }}
         >
-          <div>
-            <label>Account Number</label>
-            <br />
-
-            <input
-              type="text"
-              placeholder="Example: ACC10005"
-              value={accountNumber}
-              onChange={(e) =>
-                setAccountNumber(e.target.value)
-              }
-              required
-              disabled={submitting}
-            />
-          </div>
-
-          <br />
-
-          <div>
-            <label>Balance</label>
-            <br />
-
-            <input
-              type="number"
-              min="0"
-              placeholder="Enter balance"
-              value={balance}
-              onChange={(e) =>
-                setBalance(e.target.value)
-              }
-              required
-              disabled={submitting}
-            />
-          </div>
-
-          <br />
-
-          <div>
-            <label>Customer ID</label>
-            <br />
-
-            <input
-              type="number"
-              min="1"
-              placeholder="Example: 2"
-              value={customerId}
-              onChange={(e) =>
-                setCustomerId(e.target.value)
-              }
-              required
-              disabled={submitting}
-            />
-          </div>
-
-          <br />
-
-          <button
-            type="submit"
-            disabled={submitting}
-          >
-            {submitting
-              ? editingId
-                ? "Updating..."
-                : "Creating..."
-              : editingId
-              ? "Update Account"
-              : "Create Account"}
-          </button>
-
-          {editingId && (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              disabled={submitting}
-              style={{ marginLeft: 8 }}
-            >
-              Cancel
-            </button>
-          )}
-        </form>
-
-        {message && (
-          <p style={{ color: "green" }}>
-            {message}
-          </p>
-        )}
-
-        {error && (
-          <p style={{ color: "crimson" }}>
-            {error}
-          </p>
-        )}
-      </div>
-
-      <h2>All Accounts</h2>
-
-      {accounts.length === 0 ? (
-        <p>No accounts found.</p>
-      ) : (
-        accounts.map((account) => (
-          <div
-            key={account.id}
-            style={{
-              marginBottom: 20,
-              padding: 20,
-              border: "1px solid #ddd",
-              borderRadius: 8,
-              maxWidth: 700,
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              alignItems: "center",
+              flex: 1,
             }}
           >
-            <h3>{account.accountNumber}</h3>
-
-            <p>
-              <strong>Account ID:</strong>{" "}
-              {account.id}
-            </p>
-
-            <p>
-              <strong>Balance:</strong> ₹
-              {Number(account.balance ?? 0).toFixed(2)}
-            </p>
-
-            <p>
-              <strong>Customer:</strong>{" "}
-              {account.customer?.name || "N/A"}
-            </p>
-
-            <p>
-              <strong>Email:</strong>{" "}
-              {account.customer?.email || "N/A"}
-            </p>
-
-            <button
-              onClick={() => handleEdit(account)}
-              disabled={submitting}
+            <Avatar
+              sx={{
+                width: 54,
+                height: 54,
+                borderRadius: 2.5,
+                bgcolor: "#eff8ff",
+                color: "#1570ef",
+                border:
+                  "1px solid #b2ddff",
+              }}
             >
-              Edit
-            </button>
+              <AccountBalance />
+            </Avatar>
 
-            <button
-              onClick={() => handleDelete(account.id)}
-              disabled={submitting}
-              style={{ marginLeft: 8 }}
+            <Box>
+              <Typography
+                sx={{
+                  fontSize: {
+                    xs: "1.7rem",
+                    sm: "2rem",
+                    md: "2.25rem",
+                  },
+                  fontWeight: 900,
+                  letterSpacing: "-0.04em",
+                  color: "#101828",
+                }}
+              >
+                Accounts
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.35,
+                  color: "#667085",
+                  fontSize: ".9rem",
+                }}
+              >
+                Manage bank accounts, balances and
+                customer relationships
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: "center",
+            }}
+          >
+            <Button
+              variant="outlined"
+              startIcon={<Refresh />}
+              onClick={loadAccounts}
+              disabled={loading || submitting}
+              sx={{
+                height: 42,
+                borderRadius: 2,
+                textTransform: "none",
+                fontWeight: 750,
+                borderColor: "#d0d5dd",
+                color: "#344054",
+              }}
             >
-              Delete
-            </button>
-          </div>
-        ))
-      )}
-    </div>
+              Refresh
+            </Button>
+
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => {
+                resetForm();
+
+                window.scrollTo({
+                  top: 0,
+                  behavior: "smooth",
+                });
+              }}
+              sx={{
+                height: 42,
+                borderRadius: 2,
+                textTransform: "none",
+                fontWeight: 800,
+                bgcolor: "#1570ef",
+                boxShadow:
+                  "0 4px 12px rgba(21,112,239,.2)",
+
+                "&:hover": {
+                  bgcolor: "#175cd3",
+                },
+              }}
+            >
+              New Account
+            </Button>
+          </Stack>
+        </Stack>
+
+        {/* =================================================
+            GLOBAL ERROR
+        ================================================= */}
+
+        {error && (
+          <Alert
+            severity="error"
+            icon={<Error />}
+            onClose={() => setError("")}
+            sx={{
+              mb: 2.5,
+              borderRadius: 2,
+            }}
+          >
+            {error}
+          </Alert>
+        )}
+
+        {message && (
+          <Alert
+            severity="success"
+            icon={<CheckCircle />}
+            onClose={() => setMessage("")}
+            sx={{
+              mb: 2.5,
+              borderRadius: 2,
+            }}
+          >
+            {message}
+          </Alert>
+        )}
+
+        {/* =================================================
+            STAT CARDS
+        ================================================= */}
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, 1fr)",
+              lg: "repeat(3, 1fr)",
+            },
+            gap: 2,
+            mb: 3,
+          }}
+        >
+          <StatCard
+            icon={<AccountBalanceWallet />}
+            title="Total Accounts"
+            value={accounts.length}
+            subtitle="Active accounts in system"
+            iconBg="#eff8ff"
+            iconColor="#1570ef"
+          />
+
+          <StatCard
+            icon={<TrendingUp />}
+            title="Total Balance"
+            value={formatCurrency(totalBalance)}
+            subtitle="Combined account balance"
+            iconBg="#ecfdf3"
+            iconColor="#039855"
+          />
+
+          <StatCard
+            icon={<People />}
+            title="Average Balance"
+            value={formatCurrency(averageBalance)}
+            subtitle="Average per account"
+            iconBg="#f9f5ff"
+            iconColor="#7f56d9"
+          />
+        </Box>
+
+        {/* =================================================
+            MAIN CONTENT
+        ================================================= */}
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              lg: "minmax(0, 1.65fr) minmax(320px, .7fr)",
+            },
+            gap: 3,
+            alignItems: "start",
+          }}
+        >
+          {/* =================================================
+              LEFT
+          ================================================= */}
+
+          <Stack spacing={3}>
+            {/* FORM */}
+
+            <Card
+              sx={{
+                borderRadius: 3,
+                border:
+                  "1px solid #e4e7ec",
+                boxShadow:
+                  "0 8px 25px rgba(16,24,40,.05)",
+              }}
+            >
+              <CardContent
+                sx={{
+                  p: {
+                    xs: 2,
+                    sm: 3,
+                    md: 3.5,
+                  },
+                }}
+              >
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{
+                    alignItems: "center",
+                    mb: 3,
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 2,
+                      bgcolor: editingId
+                        ? "#fff7ed"
+                        : "#eff8ff",
+                      color: editingId
+                        ? "#c2410c"
+                        : "#1570ef",
+                    }}
+                  >
+                    {editingId ? (
+                      <Edit />
+                    ) : (
+                      <Add />
+                    )}
+                  </Avatar>
+
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontWeight: 850,
+                        fontSize: "1.1rem",
+                        color: "#101828",
+                      }}
+                    >
+                      {editingId
+                        ? "Edit Account"
+                        : "Create New Account"}
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        mt: 0.3,
+                        color: "#667085",
+                      }}
+                    >
+                      {editingId
+                        ? "Update the account information below."
+                        : "Enter the account and customer information."}
+                    </Typography>
+                  </Box>
+                </Stack>
+
+                <Divider sx={{ mb: 3 }} />
+
+                <form
+                  onSubmit={
+                    editingId
+                      ? handleUpdateAccount
+                      : handleCreateAccount
+                  }
+                >
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        md: "repeat(2, 1fr)",
+                      },
+                      gap: 2,
+                    }}
+                  >
+                    <TextField
+                      fullWidth
+                      label="Account Number"
+                      placeholder="Example: ACC10005"
+                      value={accountNumber}
+                      onChange={(event) =>
+                        setAccountNumber(
+                          event.target.value
+                        )
+                      }
+                      disabled={submitting}
+                      required
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <AccountBalance
+                              sx={{
+                                color:
+                                  "#98a2b3",
+                              }}
+                            />
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={inputStyles}
+                    />
+
+                    <TextField
+                      fullWidth
+                      label="Customer ID"
+                      type="number"
+                      inputProps={{
+                        min: 1,
+                      }}
+                      placeholder="Example: 2"
+                      value={customerId}
+                      onChange={(event) =>
+                        setCustomerId(
+                          event.target.value
+                        )
+                      }
+                      disabled={submitting}
+                      required
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <People
+                              sx={{
+                                color:
+                                  "#98a2b3",
+                              }}
+                            />
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={inputStyles}
+                    />
+
+                    <TextField
+                      fullWidth
+                      label="Opening Balance"
+                      type="number"
+                      inputProps={{
+                        min: 0,
+                        step: "0.01",
+                      }}
+                      placeholder="0.00"
+                      value={balance}
+                      onChange={(event) =>
+                        setBalance(
+                          event.target.value
+                        )
+                      }
+                      disabled={submitting}
+                      required
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Typography
+                              sx={{
+                                fontWeight: 900,
+                                color:
+                                  "#344054",
+                              }}
+                            >
+                              ₹
+                            </Typography>
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={{
+                        ...inputStyles,
+
+                        "& .MuiInputBase-input":
+                          {
+                            fontWeight: 750,
+                          },
+                      }}
+                    />
+                  </Box>
+
+                  <Stack
+                    direction={{
+                      xs: "column",
+                      sm: "row",
+                    }}
+                    spacing={1.5}
+                    sx={{
+                      mt: 3,
+                    }}
+                  >
+                    {editingId && (
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        startIcon={<Close />}
+                        onClick={
+                          handleCancelEdit
+                        }
+                        disabled={submitting}
+                        sx={{
+                          minHeight: 48,
+                          borderRadius: 2,
+                          textTransform:
+                            "none",
+                          fontWeight: 750,
+                          borderColor:
+                            "#d0d5dd",
+                          color: "#344054",
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      startIcon={
+                        submitting ? (
+                          <CircularProgress
+                            size={18}
+                            color="inherit"
+                          />
+                        ) : editingId ? (
+                          <Edit />
+                        ) : (
+                          <Add />
+                        )
+                      }
+                      disabled={submitting}
+                      sx={{
+                        minHeight: 48,
+                        flex: 1,
+                        borderRadius: 2,
+                        textTransform:
+                          "none",
+                        fontWeight: 800,
+                        bgcolor: "#1570ef",
+
+                        "&:hover": {
+                          bgcolor: "#175cd3",
+                        },
+                      }}
+                    >
+                      {submitting
+                        ? editingId
+                          ? "Updating..."
+                          : "Creating..."
+                        : editingId
+                        ? "Update Account"
+                        : "Create Account"}
+                    </Button>
+                  </Stack>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* ACCOUNT LIST */}
+
+            <Card
+              sx={{
+                borderRadius: 3,
+                border:
+                  "1px solid #e4e7ec",
+                boxShadow:
+                  "0 8px 25px rgba(16,24,40,.05)",
+                overflow: "hidden",
+              }}
+            >
+              <Box
+                sx={{
+                  p: {
+                    xs: 2,
+                    sm: 2.5,
+                  },
+                  borderBottom:
+                    "1px solid #eaecf0",
+                  bgcolor: "#fff",
+                }}
+              >
+                <Stack
+                  direction={{
+                    xs: "column",
+                    sm: "row",
+                  }}
+                  spacing={2}
+                  sx={{
+                    alignItems: {
+                      xs: "stretch",
+                      sm: "center",
+                    },
+                    justifyContent:
+                      "space-between",
+                  }}
+                >
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontWeight: 850,
+                        fontSize: "1.05rem",
+                        color: "#101828",
+                      }}
+                    >
+                      All Accounts
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        mt: 0.25,
+                        color: "#667085",
+                      }}
+                    >
+                      {filteredAccounts.length}{" "}
+                      account
+                      {filteredAccounts.length !==
+                      1
+                        ? "s"
+                        : ""}{" "}
+                      displayed
+                    </Typography>
+                  </Box>
+
+                  <TextField
+                    size="small"
+                    placeholder="Search accounts..."
+                    value={search}
+                    onChange={(event) =>
+                      setSearch(
+                        event.target.value
+                      )
+                    }
+                    sx={{
+                      width: {
+                        xs: "100%",
+                        sm: 270,
+                      },
+
+                      "& .MuiOutlinedInput-root":
+                        {
+                          borderRadius: 2,
+                        },
+                    }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search
+                            sx={{
+                              fontSize: 20,
+                              color:
+                                "#98a2b3",
+                            }}
+                          />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Stack>
+              </Box>
+
+              {filteredAccounts.length === 0 ? (
+                <Box
+                  sx={{
+                    p: 6,
+                    textAlign: "center",
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 64,
+                      height: 64,
+                      mx: "auto",
+                      bgcolor: "#f2f4f7",
+                      color: "#98a2b3",
+                    }}
+                  >
+                    <AccountBalanceWallet />
+                  </Avatar>
+
+                  <Typography
+                    sx={{
+                      mt: 2,
+                      fontWeight: 800,
+                      color: "#344054",
+                    }}
+                  >
+                    No accounts found
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      mt: 0.5,
+                      color: "#667085",
+                    }}
+                  >
+                    {search
+                      ? "Try a different search term."
+                      : "Create your first bank account to get started."}
+                  </Typography>
+                </Box>
+              ) : (
+                <Stack
+                  divider={
+                    <Divider flexItem />
+                  }
+                >
+                  {filteredAccounts.map(
+                    (account) => (
+                      <AccountRow
+                        key={account.id}
+                        account={account}
+                        onEdit={handleEdit}
+                        onDelete={
+                          openDeleteDialog
+                        }
+                        onView={
+                          handleViewDetails
+                        }
+                        onCopy={
+                          copyAccountNumber
+                        }
+                        disabled={submitting}
+                      />
+                    )
+                  )}
+                </Stack>
+              )}
+            </Card>
+          </Stack>
+
+          {/* =================================================
+              SIDEBAR
+          ================================================= */}
+
+          <Stack spacing={2.5}>
+            <Card
+              sx={{
+                borderRadius: 3,
+                border:
+                  "1px solid #e4e7ec",
+                boxShadow:
+                  "0 8px 25px rgba(16,24,40,.05)",
+              }}
+            >
+              <CardContent sx={{ p: 2.5 }}>
+                <Stack
+                  direction="row"
+                  spacing={1.3}
+                  sx={{
+                    alignItems: "center",
+                    mb: 2.5,
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 2,
+                      bgcolor: "#eff8ff",
+                      color: "#1570ef",
+                    }}
+                  >
+                    <AccountBalanceWallet />
+                  </Avatar>
+
+                  <Box>
+                    <Typography
+                      fontWeight={850}
+                      color="#101828"
+                    >
+                      Account Overview
+                    </Typography>
+
+                    <Typography
+                      variant="caption"
+                      color="#667085"
+                    >
+                      Current portfolio
+                    </Typography>
+                  </Box>
+                </Stack>
+
+                <Stack spacing={2}>
+                  <SidebarMetric
+                    label="Total accounts"
+                    value={accounts.length}
+                  />
+
+                  <SidebarMetric
+                    label="Total balance"
+                    value={formatCurrency(
+                      totalBalance
+                    )}
+                  />
+
+                  <SidebarMetric
+                    label="Average balance"
+                    value={formatCurrency(
+                      averageBalance
+                    )}
+                  />
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Card
+              sx={{
+                borderRadius: 3,
+                bgcolor: "#eff8ff",
+                border:
+                  "1px solid #b2ddff",
+                boxShadow: "none",
+              }}
+            >
+              <CardContent sx={{ p: 2.5 }}>
+                <Stack
+                  direction="row"
+                  spacing={1.3}
+                  sx={{
+                    alignItems:
+                      "flex-start",
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      bgcolor: "#d1e9ff",
+                      color: "#1570ef",
+                    }}
+                  >
+                    <AccountBalance />
+                  </Avatar>
+
+                  <Box>
+                    <Typography
+                      fontWeight={850}
+                      color="#175cd3"
+                    >
+                      Account Management
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        mt: 0.6,
+                        color: "#1849a9",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Create, update and
+                      manage customer bank
+                      accounts from one place.
+                    </Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Stack>
+        </Box>
+      </Box>
+
+      {/* =====================================================
+          DELETE DIALOG
+      ===================================================== */}
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={closeDeleteDialog}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle sx={{ p: 3 }}>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              alignItems: "center",
+            }}
+          >
+            <Avatar
+              sx={{
+                bgcolor: "#fef3f2",
+                color: "#d92d20",
+              }}
+            >
+              <Delete />
+            </Avatar>
+
+            <Box>
+              <Typography
+                fontWeight={900}
+              >
+                Delete Account
+              </Typography>
+
+              <Typography
+                variant="caption"
+                color="#667085"
+              >
+                This action cannot be undone
+              </Typography>
+            </Box>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3 }}>
+          <Typography
+            variant="body2"
+            color="#475467"
+            lineHeight={1.7}
+          >
+            Are you sure you want to delete
+            account{" "}
+            <strong>
+              {accountToDelete?.accountNumber}
+            </strong>
+            ?
+          </Typography>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            p: 2.5,
+            gap: 1,
+          }}
+        >
+          <Button
+            onClick={closeDeleteDialog}
+            disabled={submitting}
+            sx={{
+              borderRadius: 2,
+              textTransform: "none",
+              fontWeight: 750,
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={
+              submitting ? (
+                <CircularProgress
+                  size={17}
+                  color="inherit"
+                />
+              ) : (
+                <Delete />
+              )
+            }
+            onClick={handleDelete}
+            disabled={submitting}
+            sx={{
+              borderRadius: 2,
+              textTransform: "none",
+              fontWeight: 800,
+            }}
+          >
+            {submitting
+              ? "Deleting..."
+              : "Delete Account"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* =====================================================
+          DETAILS DIALOG
+      ===================================================== */}
+
+      <Dialog
+        open={detailsOpen}
+        onClose={() =>
+          setDetailsOpen(false)
+        }
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            p: 3,
+            borderBottom:
+              "1px solid #eaecf0",
+          }}
+        >
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              alignItems: "center",
+            }}
+          >
+            <Avatar
+              sx={{
+                bgcolor: "#eff8ff",
+                color: "#1570ef",
+              }}
+            >
+              <AccountBalanceWallet />
+            </Avatar>
+
+            <Box>
+              <Typography
+                fontWeight={900}
+              >
+                Account Details
+              </Typography>
+
+              <Typography
+                variant="caption"
+                color="#667085"
+              >
+                Account information
+              </Typography>
+            </Box>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3 }}>
+          {selectedAccount && (
+            <Stack spacing={0}>
+              <DetailRow
+                label="Account Number"
+                value={
+                  selectedAccount.accountNumber
+                }
+              />
+
+              <DetailRow
+                label="Account ID"
+                value={
+                  selectedAccount.id
+                }
+              />
+
+              <DetailRow
+                label="Balance"
+                value={formatCurrency(
+                  selectedAccount.balance
+                )}
+                highlight
+              />
+
+              <DetailRow
+                label="Customer ID"
+                value={
+                  getCustomerId(
+                    selectedAccount
+                  ) || "N/A"
+                }
+              />
+
+              <DetailRow
+                label="Customer Name"
+                value={getCustomerName(
+                  selectedAccount
+                )}
+              />
+
+              <DetailRow
+                label="Customer Email"
+                value={getCustomerEmail(
+                  selectedAccount
+                )}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button
+            onClick={() =>
+              setDetailsOpen(false)
+            }
+            sx={{
+              borderRadius: 2,
+              textTransform: "none",
+              fontWeight: 750,
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* =====================================================
+          TOAST
+      ===================================================== */}
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={4500}
+        onClose={() =>
+          setToast((previous) => ({
+            ...previous,
+            open: false,
+          }))
+        }
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "right",
+        }}
+      >
+        <Alert
+          severity={toast.type}
+          variant="filled"
+          icon={
+            toast.type === "success" ? (
+              <CheckCircle />
+            ) : (
+              <Error />
+            )
+          }
+          onClose={() =>
+            setToast((previous) => ({
+              ...previous,
+              open: false,
+            }))
+          }
+          sx={{
+            borderRadius: 2,
+            minWidth: {
+              xs: "calc(100vw - 32px)",
+              sm: 360,
+            },
+            fontWeight: 650,
+          }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 }
+
+/* =========================================================
+   ACCOUNT ROW
+========================================================= */
+
+function AccountRow({
+  account,
+  onEdit,
+  onDelete,
+  onView,
+  onCopy,
+  disabled,
+}) {
+  const balance = Number(
+    account.balance || 0
+  );
+
+  return (
+    <Box
+      sx={{
+        p: {
+          xs: 2,
+          sm: 2.5,
+        },
+        transition:
+          "background-color .15s ease",
+
+        "&:hover": {
+          bgcolor: "#f9fafb",
+        },
+      }}
+    >
+      <Stack
+        direction={{
+          xs: "column",
+          md: "row",
+        }}
+        spacing={2}
+        sx={{
+          alignItems: {
+            xs: "stretch",
+            md: "center",
+          },
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            alignItems: "center",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <Avatar
+            sx={{
+              width: 46,
+              height: 46,
+              borderRadius: 2,
+              bgcolor: "#eff8ff",
+              color: "#1570ef",
+              flexShrink: 0,
+            }}
+          >
+            <AccountBalanceWallet />
+          </Avatar>
+
+          <Box
+            sx={{
+              minWidth: 0,
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{
+                alignItems: "center",
+              }}
+            >
+              <Typography
+                fontWeight={850}
+                color="#101828"
+                noWrap
+              >
+                {account.accountNumber ||
+                  "Unnamed Account"}
+              </Typography>
+
+              <Tooltip title="Copy account number">
+                <IconButton
+                  size="small"
+                  onClick={() =>
+                    onCopy(
+                      account.accountNumber
+                    )
+                  }
+                >
+                  <ContentCopy
+                    sx={{
+                      fontSize: 15,
+                    }}
+                  />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+
+            <Typography
+              variant="caption"
+              color="#667085"
+              noWrap
+            >
+              Account ID #{account.id}
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Box
+          sx={{
+            minWidth: {
+              md: 170,
+            },
+          }}
+        >
+          <Typography
+            variant="caption"
+            color="#667085"
+          >
+            BALANCE
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.2,
+              fontWeight: 900,
+              fontSize: "1.05rem",
+              color:
+                balance > 0
+                  ? "#027a48"
+                  : "#667085",
+            }}
+          >
+            {formatCurrency(balance)}
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{
+            minWidth: {
+              md: 170,
+            },
+          }}
+        >
+          <Typography
+            variant="caption"
+            color="#667085"
+          >
+            CUSTOMER
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.2,
+              fontWeight: 750,
+              color: "#344054",
+            }}
+            noWrap
+          >
+            {getCustomerName(account)}
+          </Typography>
+
+          <Typography
+            variant="caption"
+            color="#98a2b3"
+            noWrap
+          >
+            ID:{" "}
+            {getCustomerId(account) ||
+              "N/A"}
+          </Typography>
+        </Box>
+
+        <Chip
+          size="small"
+          label="ACTIVE"
+          icon={<CheckCircle />}
+          sx={{
+            alignSelf: {
+              xs: "flex-start",
+              md: "center",
+            },
+            height: 28,
+            fontWeight: 800,
+            bgcolor: "#ecfdf3",
+            color: "#027a48",
+            border:
+              "1px solid #abefc6",
+
+            "& .MuiChip-icon": {
+              color: "#12b76a",
+              fontSize: 16,
+            },
+          }}
+        />
+
+        <Stack
+          direction="row"
+          spacing={0.5}
+          sx={{
+            alignItems: "center",
+          }}
+        >
+          <Tooltip title="View details">
+            <IconButton
+              onClick={() =>
+                onView(account)
+              }
+              disabled={disabled}
+              sx={{
+                color: "#475467",
+              }}
+            >
+              <ArrowUpward
+                sx={{
+                  transform:
+                    "rotate(45deg)",
+                }}
+              />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Edit">
+            <IconButton
+              onClick={() =>
+                onEdit(account)
+              }
+              disabled={disabled}
+              sx={{
+                color: "#1570ef",
+              }}
+            >
+              <Edit />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Delete">
+            <IconButton
+              onClick={() =>
+                onDelete(account)
+              }
+              disabled={disabled}
+              sx={{
+                color: "#d92d20",
+              }}
+            >
+              <Delete />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+}
+
+/* =========================================================
+   STAT CARD
+========================================================= */
+
+function StatCard({
+  icon,
+  title,
+  value,
+  subtitle,
+  iconBg,
+  iconColor,
+}) {
+  return (
+    <Card
+      sx={{
+        borderRadius: 3,
+        border:
+          "1px solid #e4e7ec",
+        boxShadow:
+          "0 8px 25px rgba(16,24,40,.05)",
+      }}
+    >
+      <CardContent sx={{ p: 2.5 }}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            alignItems: "center",
+          }}
+        >
+          <Avatar
+            sx={{
+              width: 46,
+              height: 46,
+              borderRadius: 2,
+              bgcolor: iconBg,
+              color: iconColor,
+            }}
+          >
+            {icon}
+          </Avatar>
+
+          <Box
+            sx={{
+              minWidth: 0,
+            }}
+          >
+            <Typography
+              variant="caption"
+              color="#667085"
+              fontWeight={700}
+            >
+              {title}
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.2,
+                fontWeight: 900,
+                fontSize: "1.2rem",
+                color: "#101828",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {value}
+            </Typography>
+
+            <Typography
+              variant="caption"
+              color="#98a2b3"
+            >
+              {subtitle}
+            </Typography>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* =========================================================
+   SIDEBAR METRIC
+========================================================= */
+
+function SidebarMetric({
+  label,
+  value,
+}) {
+  return (
+    <Stack
+      direction="row"
+      sx={{
+        alignItems: "center",
+        justifyContent:
+          "space-between",
+        gap: 2,
+      }}
+    >
+      <Typography
+        variant="body2"
+        color="#667085"
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        variant="body2"
+        fontWeight={850}
+        color="#344054"
+      >
+        {value}
+      </Typography>
+    </Stack>
+  );
+}
+
+/* =========================================================
+   DETAIL ROW
+========================================================= */
+
+function DetailRow({
+  label,
+  value,
+  highlight = false,
+}) {
+  return (
+    <Stack
+      direction="row"
+      spacing={2}
+      sx={{
+        alignItems: "center",
+        justifyContent:
+          "space-between",
+        py: 1.4,
+        borderBottom:
+          "1px solid #f2f4f7",
+      }}
+    >
+      <Typography
+        variant="body2"
+        color="#667085"
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        variant="body2"
+        fontWeight={highlight ? 900 : 750}
+        color={
+          highlight
+            ? "#027a48"
+            : "#344054"
+        }
+        sx={{
+          textAlign: "right",
+          wordBreak: "break-word",
+        }}
+      >
+        {value}
+      </Typography>
+    </Stack>
+  );
+}
+
+/* =========================================================
+   INPUT STYLES
+========================================================= */
+
+const inputStyles = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: 2,
+    bgcolor: "#fff",
+
+    "& fieldset": {
+      borderColor: "#d0d5dd",
+    },
+
+    "&:hover fieldset": {
+      borderColor: "#98a2b3",
+    },
+
+    "&.Mui-focused fieldset": {
+      borderWidth: "1.5px",
+      borderColor: "#1570ef",
+    },
+  },
+
+  "& .MuiInputLabel-root": {
+    color: "#667085",
+  },
+
+  "& .MuiInputLabel-root.Mui-focused": {
+    color: "#1570ef",
+  },
+
+  "& .MuiFormHelperText-root": {
+    marginLeft: 0,
+  },
+};
 
 export default Accounts;

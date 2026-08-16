@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import {
   Alert,
@@ -16,141 +15,236 @@ import {
   Divider,
   IconButton,
   InputAdornment,
-  LinearProgress,
-  Pagination,
-  Skeleton,
+  Paper,
+  Snackbar,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-import SearchIcon from "@mui/icons-material/Search";
-import PeopleIcon from "@mui/icons-material/People";
-import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
-import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
+import PersonAddOutlinedIcon from "@mui/icons-material/PersonAddOutlined";
+import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import DeleteIcon from "@mui/icons-material/Delete";
-import PhoneOutlinedIcon from "@mui/icons-material/PhoneOutlined";
-import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
-import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
-import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 
 import api from "../services/api";
 
-const PAGE_SIZE = 6;
-
 function Customers() {
-  const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const [customers, setCustomers] = useState([]);
-
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
 
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerToDelete, setCustomerToDelete] = useState(null);
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  /* =========================
-     LOAD CUSTOMERS
-  ========================= */
-
-  const loadCustomers = async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      setError("");
-
-      const response = await api.get("/customers");
-
-      setCustomers(
-        Array.isArray(response?.data) ? response.data : []
-      );
-    } catch (err) {
-      console.error("Customers loading failed:", err);
-
-      setError(
-        err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Unable to load customers. Please try again."
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
   useEffect(() => {
     loadCustomers();
   }, []);
 
-  /* =========================
-     HELPERS
-  ========================= */
+  const loadCustomers = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-  const getCustomerName = (customer) => {
-    return (
-      customer?.name ||
-      customer?.fullName ||
-      customer?.customerName ||
-      "Unknown Customer"
-    );
+      const response = await api.get("/customers");
+
+      setCustomers(response.data || []);
+    } catch (error) {
+      console.error("Failed to load customers:", error);
+
+      setError(
+        error.response?.data?.message ||
+          "Failed to load customers."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getCustomerEmail = (customer) => {
-    return (
-      customer?.email ||
-      customer?.emailAddress ||
-      "Email unavailable"
-    );
+  const showMessage = (message, severity = "success") => {
+    setSnackbar({
+      open: true,
+      message,
+      severity,
+    });
   };
 
-  const getCustomerPhone = (customer) => {
-    return (
-      customer?.phone ||
-      customer?.phoneNumber ||
-      customer?.mobile ||
-      "Phone unavailable"
-    );
+  const closeSnackbar = () => {
+    setSnackbar((previous) => ({
+      ...previous,
+      open: false,
+    }));
   };
 
-  const getCustomerId = (customer) => {
-    return (
-      customer?.id ??
-      customer?.customerId ??
-      "N/A"
-    );
+  const resetForm = () => {
+    setName("");
+    setEmail("");
+    setPhone("");
+    setEditingCustomer(null);
   };
 
-  const getInitials = (name) => {
-    if (!name) return "U";
-
-    return String(name)
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part.charAt(0))
-      .join("")
-      .toUpperCase();
+  const openAddDialog = () => {
+    resetForm();
+    setDialogOpen(true);
   };
 
-  /* =========================
-     FILTERING
-  ========================= */
+  const openEditDialog = (customer) => {
+    setEditingCustomer(customer);
+
+    setName(customer.name || "");
+    setEmail(customer.email || "");
+    setPhone(customer.phone || "");
+
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    if (saving) {
+      return;
+    }
+
+    setDialogOpen(false);
+    resetForm();
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setError("");
+
+    try {
+      setSaving(true);
+
+      const customerData = {
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+      };
+
+      if (editingCustomer) {
+        const response = await api.put(
+          `/customers/${editingCustomer.id}`,
+          customerData
+        );
+
+        setCustomers((previous) =>
+          previous.map((customer) =>
+            customer.id === editingCustomer.id
+              ? response.data
+              : customer
+          )
+        );
+
+        showMessage("Customer updated successfully.");
+      } else {
+        const response = await api.post(
+          "/customers",
+          customerData
+        );
+
+        setCustomers((previous) => [
+          ...previous,
+          response.data,
+        ]);
+
+        showMessage("Customer created successfully.");
+      }
+
+      setDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error("Customer save failed:", error);
+
+      showMessage(
+        error.response?.data?.message ||
+          "Failed to save customer.",
+        "error"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openDeleteDialog = (customer) => {
+    setCustomerToDelete(customer);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleting) {
+      return;
+    }
+
+    setDeleteDialogOpen(false);
+    setCustomerToDelete(null);
+  };
+
+  const handleDelete = async () => {
+    if (!customerToDelete) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+
+      await api.delete(
+        `/customers/${customerToDelete.id}`
+      );
+
+      setCustomers((previous) =>
+        previous.filter(
+          (customer) =>
+            customer.id !== customerToDelete.id
+        )
+      );
+
+      showMessage("Customer deleted successfully.");
+
+      setDeleteDialogOpen(false);
+      setCustomerToDelete(null);
+    } catch (error) {
+      console.error("Customer deletion failed:", error);
+
+      showMessage(
+        error.response?.data?.message ||
+          "Failed to delete customer.",
+        "error"
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const filteredCustomers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -160,184 +254,59 @@ function Customers() {
     }
 
     return customers.filter((customer) => {
-      const values = [
-        getCustomerId(customer),
-        getCustomerName(customer),
-        getCustomerEmail(customer),
-        getCustomerPhone(customer),
-        customer?.address,
-        customer?.city,
-        customer?.accountNumber,
-      ];
-
-      return values.some((value) =>
-        String(value ?? "")
+      return (
+        String(customer.id)
+          .toLowerCase()
+          .includes(query) ||
+        String(customer.name || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(customer.email || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(customer.phone || "")
           .toLowerCase()
           .includes(query)
       );
     });
   }, [customers, search]);
 
-  /* =========================
-     PAGINATION
-  ========================= */
+  const getInitials = (customerName = "") => {
+    const words = customerName
+      .trim()
+      .split(" ")
+      .filter(Boolean);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredCustomers.length / PAGE_SIZE)
-  );
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
-
-  const paginatedCustomers = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-
-    return filteredCustomers.slice(
-      start,
-      start + PAGE_SIZE
-    );
-  }, [filteredCustomers, page]);
-
-  /* =========================
-     CUSTOMER DETAILS
-  ========================= */
-
-  const openCustomerDetails = (customer) => {
-    setSelectedCustomer(customer);
-    setDialogOpen(true);
-  };
-
-  const closeCustomerDetails = () => {
-    setDialogOpen(false);
-    setSelectedCustomer(null);
-  };
-
-  /* =========================
-     DELETE CUSTOMER
-  ========================= */
-
-  const openDeleteDialog = (customer) => {
-    setCustomerToDelete(customer);
-    setDeleteDialogOpen(true);
-  };
-
-  const closeDeleteDialog = () => {
-    if (deleting) return;
-
-    setDeleteDialogOpen(false);
-    setCustomerToDelete(null);
-  };
-
-  const deleteCustomer = async () => {
-    if (!customerToDelete) return;
-
-    const customerId = getCustomerId(customerToDelete);
-
-    if (customerId === "N/A") {
-      return;
+    if (words.length === 0) {
+      return "?";
     }
 
-    try {
-      setDeleting(true);
-      setError("");
-
-      await api.delete(`/customers/${customerId}`);
-
-      setCustomers((previous) =>
-        previous.filter(
-          (customer) =>
-            String(getCustomerId(customer)) !==
-            String(customerId)
-        )
-      );
-
-      setDeleteDialogOpen(false);
-      setCustomerToDelete(null);
-
-      if (selectedCustomer) {
-        setDialogOpen(false);
-        setSelectedCustomer(null);
-      }
-    } catch (err) {
-      console.error("Customer deletion failed:", err);
-
-      setError(
-        err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Unable to delete customer. Please try again."
-      );
-    } finally {
-      setDeleting(false);
+    if (words.length === 1) {
+      return words[0][0].toUpperCase();
     }
+
+    return (
+      words[0][0] +
+      words[words.length - 1][0]
+    ).toUpperCase();
   };
-
-  /* =========================
-     CLEAR SEARCH
-  ========================= */
-
-  const clearSearch = () => {
-    setSearch("");
-    setPage(1);
-  };
-
-  /* =========================
-     LOADING STATE
-  ========================= */
 
   if (loading) {
     return (
       <Box
         sx={{
-          minHeight: "calc(100vh - 72px)",
-          background: "#f8fafc",
-          px: { xs: 2, sm: 3, lg: 4 },
-          py: 4,
+          minHeight: "70vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        <Stack spacing={3}>
-          <Box>
-            <Skeleton
-              variant="text"
-              width={210}
-              height={45}
-            />
-
-            <Skeleton
-              variant="text"
-              width={380}
-              height={25}
-            />
-          </Box>
-
-          <Skeleton
-            variant="rounded"
-            height={120}
-          />
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, 1fr)",
-                lg: "repeat(3, 1fr)",
-              },
-              gap: 2,
-            }}
-          >
-            {[1, 2, 3, 4, 5, 6].map((item) => (
-              <Skeleton
-                key={item}
-                variant="rounded"
-                height={210}
-              />
-            ))}
-          </Box>
-        </Stack>
+        <Typography
+          variant="h6"
+          color="text.secondary"
+        >
+          Loading customers...
+        </Typography>
       </Box>
     );
   }
@@ -345,600 +314,643 @@ function Customers() {
   return (
     <Box
       sx={{
-        minHeight: "calc(100vh - 72px)",
-        background: "#f8fafc",
-        px: {
+        minHeight: "calc(100vh - 64px)",
+        background:
+          "linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)",
+        p: {
           xs: 2,
           sm: 3,
-          lg: 4,
-          xl: 5,
-        },
-        py: {
-          xs: 2.5,
-          sm: 3.5,
-          lg: 4,
+          md: 4,
         },
       }}
     >
-      {/* =========================
-          PAGE HEADER
-      ========================= */}
-
       <Box
         sx={{
-          display: "flex",
-          alignItems: {
-            xs: "flex-start",
-            md: "center",
-          },
-          justifyContent: "space-between",
-          gap: 2,
-          mb: 3.5,
-          flexDirection: {
-            xs: "column",
-            md: "row",
-          },
+          maxWidth: 1400,
+          mx: "auto",
         }}
       >
-        <Box>
-          <Typography
-            sx={{
-              fontSize: {
-                xs: 26,
-                sm: 30,
-              },
-              fontWeight: 800,
-              color: "#0f172a",
-              letterSpacing: "-0.7px",
-            }}
-          >
-            Customers
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 0.5,
-              color: "#64748b",
-              fontSize: 14,
-            }}
-          >
-            Manage and monitor your registered bank customers.
-          </Typography>
-        </Box>
+        {/* HEADER */}
 
         <Stack
-          direction="row"
-          spacing={1}
-          alignItems="center"
+          direction={{
+            xs: "column",
+            md: "row",
+          }}
+          justifyContent="space-between"
+          alignItems={{
+            xs: "stretch",
+            md: "center",
+          }}
+          spacing={3}
+          mb={4}
         >
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="center"
+          >
+            <Avatar
+              sx={{
+                width: 58,
+                height: 58,
+                bgcolor: "#2563eb",
+              }}
+            >
+              <PeopleAltOutlinedIcon />
+            </Avatar>
+
+            <Box>
+              <Typography
+                variant="h4"
+                fontWeight={800}
+                color="#0f172a"
+              >
+                Customers
+              </Typography>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+              >
+                Manage bank customers
+              </Typography>
+            </Box>
+          </Stack>
+
           <Button
             variant="contained"
-            startIcon={<PersonAddAlt1Icon />}
-            onClick={() => navigate("/customers/add")}
+            size="large"
+            startIcon={<PersonAddOutlinedIcon />}
+            onClick={openAddDialog}
             sx={{
-              height: 42,
-              px: 2,
-              borderRadius: 2,
               textTransform: "none",
-              fontWeight: 800,
-              boxShadow: "none",
+              fontWeight: 700,
+              borderRadius: 2,
+              px: 3,
+              py: 1.3,
             }}
           >
             Add Customer
           </Button>
+        </Stack>
 
-          <IconButton
-            onClick={() => loadCustomers(true)}
-            disabled={refreshing}
-            aria-label="Refresh customers"
+        {/* STAT CARDS */}
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, 1fr)",
+              md: "repeat(3, 1fr)",
+            },
+            gap: 2.5,
+            mb: 3,
+          }}
+        >
+          <Card
+            elevation={0}
             sx={{
-              width: 42,
-              height: 42,
-              background: "#ffffff",
-              border: "1px solid #dbe4f0",
-              color: "#475569",
-              "&:hover": {
-                background: "#f8fafc",
+              borderRadius: 3,
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <CardContent>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+              >
+                Total Customers
+              </Typography>
+
+              <Typography
+                variant="h4"
+                fontWeight={800}
+                mt={1}
+              >
+                {customers.length}
+              </Typography>
+            </CardContent>
+          </Card>
+
+          <Card
+            elevation={0}
+            sx={{
+              borderRadius: 3,
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <CardContent>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+              >
+                Active Customers
+              </Typography>
+
+              <Typography
+                variant="h4"
+                fontWeight={800}
+                color="#16a34a"
+                mt={1}
+              >
+                {customers.length}
+              </Typography>
+            </CardContent>
+          </Card>
+
+          <Card
+            elevation={0}
+            sx={{
+              borderRadius: 3,
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <CardContent>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+              >
+                Search Results
+              </Typography>
+
+              <Typography
+                variant="h4"
+                fontWeight={800}
+                color="#7c3aed"
+                mt={1}
+              >
+                {filteredCustomers.length}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
+
+        {/* CUSTOMER LIST */}
+
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: "1px solid #e2e8f0",
+            overflow: "hidden",
+          }}
+        >
+          <CardContent
+            sx={{
+              p: {
+                xs: 2,
+                sm: 3,
               },
             }}
           >
-            <RefreshIcon
+            {/* SEARCH */}
+
+            <TextField
+              fullWidth
+              placeholder="Search by name, email, phone or ID..."
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchOutlinedIcon />
+                  </InputAdornment>
+                ),
+
+                endAdornment: search ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setSearch("")}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              }}
               sx={{
-                animation: refreshing
-                  ? "customer-spin 1s linear infinite"
-                  : "none",
-                "@keyframes customer-spin": {
-                  from: {
-                    transform: "rotate(0deg)",
-                  },
-                  to: {
-                    transform: "rotate(360deg)",
-                  },
+                mb: 3,
+
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                  backgroundColor: "#f8fafc",
                 },
               }}
             />
-          </IconButton>
-        </Stack>
-      </Box>
 
-      {refreshing && (
-        <LinearProgress
-          sx={{
-            mb: 2,
-            borderRadius: 10,
-          }}
-        />
-      )}
-
-      {/* =========================
-          ERROR
-      ========================= */}
-
-      {error && (
-        <Alert
-          severity="error"
-          sx={{
-            mb: 3,
-            borderRadius: 2,
-            alignItems: "center",
-          }}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() => loadCustomers()}
-            >
-              Retry
-            </Button>
-          }
-        >
-          {error}
-        </Alert>
-      )}
-
-      {/* =========================
-          SUMMARY
-      ========================= */}
-
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(3, 1fr)",
-          },
-          gap: 2,
-          mb: 3,
-        }}
-      >
-        <SummaryCard
-          title="Total Customers"
-          value={customers.length}
-          subtitle="Registered customers"
-          icon={<PeopleIcon />}
-          iconBackground="#eff6ff"
-          iconColor="#2563eb"
-        />
-
-        <SummaryCard
-          title="Showing"
-          value={filteredCustomers.length}
-          subtitle={
-            search
-              ? "Customers matching your search"
-              : "Customers available"
-          }
-          icon={<BadgeOutlinedIcon />}
-          iconBackground="#ecfdf5"
-          iconColor="#059669"
-        />
-
-        <SummaryCard
-          title="Current Page"
-          value={`${page} / ${totalPages}`}
-          subtitle="Customer list pagination"
-          icon={<AccountBalanceOutlinedIcon />}
-          iconBackground="#f5f3ff"
-          iconColor="#7c3aed"
-        />
-      </Box>
-
-      {/* =========================
-          CUSTOMER LIST CARD
-      ========================= */}
-
-      <Card
-        elevation={0}
-        sx={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 3,
-          background: "#ffffff",
-          overflow: "hidden",
-        }}
-      >
-        <Box
-          sx={{
-            px: {
-              xs: 2,
-              sm: 2.5,
-              lg: 3,
-            },
-            py: 2.2,
-            display: "flex",
-            alignItems: {
-              xs: "flex-start",
-              sm: "center",
-            },
-            justifyContent: "space-between",
-            gap: 2,
-            flexDirection: {
-              xs: "column",
-              sm: "row",
-            },
-          }}
-        >
-          <Box>
-            <Typography
-              sx={{
-                fontSize: 16,
-                fontWeight: 800,
-                color: "#0f172a",
-              }}
-            >
-              Customer Directory
-            </Typography>
-
-            <Typography
-              sx={{
-                mt: 0.3,
-                fontSize: 12,
-                color: "#64748b",
-              }}
-            >
-              Search and manage customer information.
-            </Typography>
-          </Box>
-
-          <Chip
-            icon={<PeopleIcon />}
-            label={`${customers.length} customers`}
-            sx={{
-              height: 30,
-              background: "#eff6ff",
-              color: "#2563eb",
-              fontWeight: 800,
-              fontSize: 11,
-              "& .MuiChip-icon": {
-                color: "#2563eb",
-                fontSize: 17,
-              },
-            }}
-          />
-        </Box>
-
-        <Divider />
-
-        {/* =========================
-            SEARCH
-        ========================= */}
-
-        <Box
-          sx={{
-            px: {
-              xs: 2,
-              sm: 2.5,
-              lg: 3,
-            },
-            py: 2,
-          }}
-        >
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Search by name, email, phone or customer ID..."
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon
-                    sx={{
-                      color: "#94a3b8",
-                    }}
-                  />
-                </InputAdornment>
-              ),
-              endAdornment: search ? (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={clearSearch}
-                    aria-label="Clear search"
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : null,
-            }}
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                borderRadius: 2,
-                background: "#f8fafc",
-              },
-            }}
-          />
-        </Box>
-
-        <Divider />
-
-        {/* =========================
-            EMPTY STATE
-        ========================= */}
-
-        {filteredCustomers.length === 0 ? (
-          <CustomerEmptyState
-            hasCustomers={customers.length > 0}
-            onClear={clearSearch}
-            onAdd={() => navigate("/customers/add")}
-          />
-        ) : (
-          <>
-            {/* =========================
-                CUSTOMER GRID
-            ========================= */}
-
-            <Box
-              sx={{
-                p: {
-                  xs: 1.5,
-                  sm: 2,
-                  lg: 2.5,
-                },
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  md: "repeat(2, 1fr)",
-                  xl: "repeat(3, 1fr)",
-                },
-                gap: 2,
-              }}
-            >
-              {paginatedCustomers.map(
-                (customer, index) => (
-                  <CustomerCard
-                    key={
-                      getCustomerId(customer) !== "N/A"
-                        ? getCustomerId(customer)
-                        : index
-                    }
-                    customer={customer}
-                    onView={() =>
-                      openCustomerDetails(customer)
-                    }
-                    onEdit={() =>
-                      navigate(
-                        `/customers/edit/${getCustomerId(
-                          customer
-                        )}`
-                      )
-                    }
-                    onDelete={() =>
-                      openDeleteDialog(customer)
-                    }
-                  />
-                )
-              )}
-            </Box>
-
-            {/* =========================
-                PAGINATION
-            ========================= */}
-
-            {totalPages > 1 && (
-              <>
-                <Divider />
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "center",
-                    p: 2.2,
-                  }}
-                >
-                  <Pagination
-                    count={totalPages}
-                    page={page}
-                    onChange={(_, newPage) =>
-                      setPage(newPage)
-                    }
-                    color="primary"
-                    size="small"
-                    showFirstButton
-                    showLastButton
-                  />
-                </Box>
-              </>
+            {error && (
+              <Alert
+                severity="error"
+                sx={{ mb: 3 }}
+              >
+                {error}
+              </Alert>
             )}
-          </>
-        )}
-      </Card>
 
-      {/* =========================
-          CUSTOMER DETAILS DIALOG
-      ========================= */}
+            {/* MOBILE */}
+
+            {isMobile ? (
+              <Stack spacing={2}>
+                {filteredCustomers.length === 0 ? (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 5,
+                      textAlign: "center",
+                      border:
+                        "1px dashed #cbd5e1",
+                      borderRadius: 3,
+                    }}
+                  >
+                    <PeopleAltOutlinedIcon
+                      sx={{
+                        fontSize: 50,
+                        color: "#94a3b8",
+                      }}
+                    />
+
+                    <Typography
+                      fontWeight={700}
+                      mt={1}
+                    >
+                      No customers found
+                    </Typography>
+                  </Paper>
+                ) : (
+                  filteredCustomers.map(
+                    (customer) => (
+                      <Card
+                        key={customer.id}
+                        elevation={0}
+                        sx={{
+                          border:
+                            "1px solid #e2e8f0",
+                          borderRadius: 3,
+                        }}
+                      >
+                        <CardContent>
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="center"
+                          >
+                            <Stack
+                              direction="row"
+                              spacing={2}
+                              alignItems="center"
+                            >
+                              <Avatar
+                                sx={{
+                                  bgcolor: "#dbeafe",
+                                  color: "#1d4ed8",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {getInitials(
+                                  customer.name
+                                )}
+                              </Avatar>
+
+                              <Box>
+                                <Typography
+                                  fontWeight={700}
+                                >
+                                  {customer.name}
+                                </Typography>
+
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  Customer #
+                                  {customer.id}
+                                </Typography>
+                              </Box>
+                            </Stack>
+
+                            <Chip
+                              label="Active"
+                              color="success"
+                              size="small"
+                            />
+                          </Stack>
+
+                          <Divider sx={{ my: 2 }} />
+
+                          <Typography
+                            variant="body2"
+                            mb={1}
+                          >
+                            <strong>Email:</strong>{" "}
+                            {customer.email || "N/A"}
+                          </Typography>
+
+                          <Typography
+                            variant="body2"
+                            mb={2}
+                          >
+                            <strong>Phone:</strong>{" "}
+                            {customer.phone || "N/A"}
+                          </Typography>
+
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                          >
+                            <Button
+                              fullWidth
+                              variant="outlined"
+                              startIcon={
+                                <EditOutlinedIcon />
+                              }
+                              onClick={() =>
+                                openEditDialog(
+                                  customer
+                                )
+                              }
+                              sx={{
+                                textTransform:
+                                  "none",
+                              }}
+                            >
+                              Edit
+                            </Button>
+
+                            <Button
+                              fullWidth
+                              variant="outlined"
+                              color="error"
+                              startIcon={
+                                <DeleteOutlineOutlinedIcon />
+                              }
+                              onClick={() =>
+                                openDeleteDialog(
+                                  customer
+                                )
+                              }
+                              sx={{
+                                textTransform:
+                                  "none",
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    )
+                  )
+                )}
+              </Stack>
+            ) : (
+              /* DESKTOP */
+
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow
+                      sx={{
+                        backgroundColor: "#f8fafc",
+                      }}
+                    >
+                      <TableCell>
+                        <strong>Customer</strong>
+                      </TableCell>
+
+                      <TableCell>
+                        <strong>Email</strong>
+                      </TableCell>
+
+                      <TableCell>
+                        <strong>Phone</strong>
+                      </TableCell>
+
+                      <TableCell>
+                        <strong>Status</strong>
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <strong>Actions</strong>
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+
+                  <TableBody>
+                    {filteredCustomers.length ===
+                    0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          align="center"
+                        >
+                          <Box py={6}>
+                            <PeopleAltOutlinedIcon
+                              sx={{
+                                fontSize: 50,
+                                color: "#cbd5e1",
+                              }}
+                            />
+
+                            <Typography
+                              fontWeight={700}
+                              mt={1}
+                            >
+                              No customers found
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredCustomers.map(
+                        (customer) => (
+                          <TableRow
+                            key={customer.id}
+                            hover
+                          >
+                            <TableCell>
+                              <Stack
+                                direction="row"
+                                spacing={2}
+                                alignItems="center"
+                              >
+                                <Avatar
+                                  sx={{
+                                    bgcolor: "#dbeafe",
+                                    color: "#1d4ed8",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {getInitials(
+                                    customer.name
+                                  )}
+                                </Avatar>
+
+                                <Box>
+                                  <Typography
+                                    fontWeight={700}
+                                  >
+                                    {customer.name}
+                                  </Typography>
+
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Customer #
+                                    {customer.id}
+                                  </Typography>
+                                </Box>
+                              </Stack>
+                            </TableCell>
+
+                            <TableCell>
+                              {customer.email ||
+                                "N/A"}
+                            </TableCell>
+
+                            <TableCell>
+                              {customer.phone ||
+                                "N/A"}
+                            </TableCell>
+
+                            <TableCell>
+                              <Chip
+                                label="Active"
+                                color="success"
+                                size="small"
+                                variant="outlined"
+                              />
+                            </TableCell>
+
+                            <TableCell align="right">
+                              <IconButton
+                                color="primary"
+                                onClick={() =>
+                                  openEditDialog(
+                                    customer
+                                  )
+                                }
+                              >
+                                <EditOutlinedIcon />
+                              </IconButton>
+
+                              <IconButton
+                                color="error"
+                                onClick={() =>
+                                  openDeleteDialog(
+                                    customer
+                                  )
+                                }
+                              >
+                                <DeleteOutlineOutlinedIcon />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      )
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* ADD / EDIT DIALOG */}
 
       <Dialog
         open={dialogOpen}
-        onClose={closeCustomerDetails}
+        onClose={closeDialog}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle
-          sx={{
-            fontWeight: 800,
-            color: "#0f172a",
-            pr: 6,
-          }}
-        >
-          Customer Details
+        <form onSubmit={handleSubmit}>
+          <DialogTitle fontWeight={800}>
+            {editingCustomer
+              ? "Edit Customer"
+              : "Add New Customer"}
+          </DialogTitle>
 
-          <IconButton
-            onClick={closeCustomerDetails}
-            sx={{
-              position: "absolute",
-              right: 12,
-              top: 12,
-              color: "#64748b",
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-
-        <DialogContent dividers>
-          {!selectedCustomer ? (
-            <Typography>
-              Customer information unavailable.
+          <DialogContent>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              mb={2}
+            >
+              Enter the customer's information.
             </Typography>
-          ) : (
-            <Stack spacing={2.5}>
-              <Stack
-                direction="row"
-                spacing={2}
-                alignItems="center"
-              >
-                <Avatar
-                  sx={{
-                    width: 56,
-                    height: 56,
-                    bgcolor: "#eff6ff",
-                    color: "#2563eb",
-                    fontWeight: 800,
-                    fontSize: 18,
-                  }}
-                >
-                  {getInitials(
-                    getCustomerName(selectedCustomer)
-                  )}
-                </Avatar>
 
-                <Box>
-                  <Typography
-                    sx={{
-                      fontSize: 17,
-                      fontWeight: 800,
-                      color: "#0f172a",
-                    }}
-                  >
-                    {getCustomerName(
-                      selectedCustomer
-                    )}
-                  </Typography>
+            <TextField
+              fullWidth
+              label="Full Name"
+              value={name}
+              onChange={(event) =>
+                setName(event.target.value)
+              }
+              margin="normal"
+              required
+            />
 
-                  <Typography
-                    sx={{
-                      mt: 0.3,
-                      color: "#64748b",
-                      fontSize: 12,
-                    }}
-                  >
-                    Customer ID:{" "}
-                    {getCustomerId(selectedCustomer)}
-                  </Typography>
-                </Box>
-              </Stack>
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
+              margin="normal"
+              required
+            />
 
-              <Divider />
+            <TextField
+              fullWidth
+              label="Phone Number"
+              value={phone}
+              onChange={(event) =>
+                setPhone(event.target.value)
+              }
+              margin="normal"
+              required
+            />
+          </DialogContent>
 
-              <DetailRow
-                icon={<EmailOutlinedIcon />}
-                label="Email"
-                value={getCustomerEmail(
-                  selectedCustomer
-                )}
-              />
+          <DialogActions sx={{ p: 3 }}>
+            <Button
+              onClick={closeDialog}
+              disabled={saving}
+              sx={{
+                textTransform: "none",
+              }}
+            >
+              Cancel
+            </Button>
 
-              <DetailRow
-                icon={<PhoneOutlinedIcon />}
-                label="Phone"
-                value={getCustomerPhone(
-                  selectedCustomer
-                )}
-              />
-
-              <DetailRow
-                icon={<BadgeOutlinedIcon />}
-                label="Customer ID"
-                value={String(
-                  getCustomerId(selectedCustomer)
-                )}
-              />
-
-              {selectedCustomer?.address && (
-                <DetailRow
-                  icon={<AccountBalanceOutlinedIcon />}
-                  label="Address"
-                  value={selectedCustomer.address}
-                />
-              )}
-
-              {selectedCustomer?.city && (
-                <DetailRow
-                  icon={<AccountBalanceOutlinedIcon />}
-                  label="City"
-                  value={selectedCustomer.city}
-                />
-              )}
-            </Stack>
-          )}
-        </DialogContent>
-
-        <DialogActions
-          sx={{
-            px: 2.5,
-            py: 1.5,
-          }}
-        >
-          <Button
-            onClick={() => {
-              if (!selectedCustomer) return;
-
-              navigate(
-                `/customers/edit/${getCustomerId(
-                  selectedCustomer
-                )}`
-              );
-            }}
-            startIcon={<EditOutlinedIcon />}
-            sx={{
-              textTransform: "none",
-              fontWeight: 700,
-            }}
-          >
-            Edit
-          </Button>
-
-          <Button
-            onClick={closeCustomerDetails}
-            variant="contained"
-            sx={{
-              textTransform: "none",
-              fontWeight: 700,
-              borderRadius: 2,
-            }}
-          >
-            Close
-          </Button>
-        </DialogActions>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={saving}
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+              }}
+            >
+              {saving
+                ? "Saving..."
+                : editingCustomer
+                ? "Update Customer"
+                : "Create Customer"}
+            </Button>
+          </DialogActions>
+        </form>
       </Dialog>
 
-      {/* =========================
-          DELETE DIALOG
-      ========================= */}
+      {/* DELETE DIALOG */}
 
       <Dialog
         open={deleteDialogOpen}
@@ -946,583 +958,67 @@ function Customers() {
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle
-          sx={{
-            fontWeight: 800,
-            color: "#0f172a",
-          }}
-        >
-          Delete Customer
+        <DialogTitle fontWeight={800}>
+          Delete Customer?
         </DialogTitle>
 
         <DialogContent>
-          <Typography
-            sx={{
-              color: "#475569",
-              fontSize: 14,
-              lineHeight: 1.6,
-            }}
-          >
+          <Typography color="text.secondary">
             Are you sure you want to delete{" "}
             <strong>
-              {customerToDelete
-                ? getCustomerName(customerToDelete)
-                : "this customer"}
+              {customerToDelete?.name}
             </strong>
             ?
           </Typography>
-
-          <Alert
-            severity="warning"
-            sx={{
-              mt: 2,
-              borderRadius: 2,
-              fontSize: 12,
-            }}
-          >
-            This action cannot be undone.
-          </Alert>
         </DialogContent>
 
-        <DialogActions
-          sx={{
-            px: 2.5,
-            py: 1.5,
-          }}
-        >
+        <DialogActions sx={{ p: 3 }}>
           <Button
             onClick={closeDeleteDialog}
             disabled={deleting}
             sx={{
               textTransform: "none",
-              fontWeight: 700,
             }}
           >
             Cancel
           </Button>
 
           <Button
-            onClick={deleteCustomer}
-            disabled={deleting}
-            variant="contained"
             color="error"
-            startIcon={<DeleteIcon />}
+            variant="contained"
+            onClick={handleDelete}
+            disabled={deleting}
             sx={{
               textTransform: "none",
               fontWeight: 700,
-              borderRadius: 2,
             }}
           >
-            {deleting ? "Deleting..." : "Delete Customer"}
+            {deleting ? "Deleting..." : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* MESSAGE */}
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={closeSnackbar}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "right",
+        }}
+      >
+        <Alert
+          severity={snackbar.severity}
+          variant="filled"
+          onClose={closeSnackbar}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
 
-/* =========================
-   SUMMARY CARD
-========================= */
-
-function SummaryCard({
-  title,
-  value,
-  subtitle,
-  icon,
-  iconBackground,
-  iconColor,
-}) {
-  return (
-    <Card
-      elevation={0}
-      sx={{
-        border: "1px solid #e2e8f0",
-        borderRadius: 3,
-        background: "#ffffff",
-        height: "100%",
-        transition:
-          "transform 0.2s ease, box-shadow 0.2s ease",
-        "&:hover": {
-          transform: "translateY(-2px)",
-          boxShadow:
-            "0 8px 24px rgba(15,23,42,0.06)",
-        },
-      }}
-    >
-      <CardContent
-        sx={{
-          p: 2.5,
-        }}
-      >
-        <Stack
-          direction="row"
-          alignItems="flex-start"
-          justifyContent="space-between"
-          spacing={2}
-        >
-          <Box minWidth={0}>
-            <Typography
-              sx={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "#64748b",
-              }}
-            >
-              {title}
-            </Typography>
-
-            <Typography
-              sx={{
-                mt: 1,
-                fontSize: 27,
-                lineHeight: 1.1,
-                fontWeight: 800,
-                color: "#0f172a",
-                letterSpacing: "-0.5px",
-              }}
-            >
-              {value}
-            </Typography>
-
-            <Typography
-              sx={{
-                mt: 0.8,
-                fontSize: 11,
-                color: "#94a3b8",
-              }}
-            >
-              {subtitle}
-            </Typography>
-          </Box>
-
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: 2.2,
-              background: iconBackground,
-              color: iconColor,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* =========================
-   CUSTOMER CARD
-========================= */
-
-function CustomerCard({
-  customer,
-  onView,
-  onEdit,
-  onDelete,
-}) {
-  const name =
-    customer?.name ||
-    customer?.fullName ||
-    customer?.customerName ||
-    "Unknown Customer";
-
-  const email =
-    customer?.email ||
-    customer?.emailAddress ||
-    "Email unavailable";
-
-  const phone =
-    customer?.phone ||
-    customer?.phoneNumber ||
-    customer?.mobile ||
-    "Phone unavailable";
-
-  const id =
-    customer?.id ??
-    customer?.customerId ??
-    "N/A";
-
-  const initials = String(name)
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
-
-  return (
-    <Card
-      elevation={0}
-      sx={{
-        border: "1px solid #e2e8f0",
-        borderRadius: 2.5,
-        background: "#ffffff",
-        transition:
-          "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
-        "&:hover": {
-          transform: "translateY(-2px)",
-          borderColor: "#cbd5e1",
-          boxShadow:
-            "0 8px 24px rgba(15,23,42,0.06)",
-        },
-      }}
-    >
-      <CardContent
-        sx={{
-          p: 2.2,
-        }}
-      >
-        <Stack spacing={2}>
-          {/* Customer heading */}
-
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            spacing={1}
-          >
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={1.4}
-              minWidth={0}
-            >
-              <Avatar
-                sx={{
-                  width: 44,
-                  height: 44,
-                  bgcolor: "#eff6ff",
-                  color: "#2563eb",
-                  fontWeight: 800,
-                  fontSize: 14,
-                  flexShrink: 0,
-                }}
-              >
-                {initials || "U"}
-              </Avatar>
-
-              <Box minWidth={0}>
-                <Typography
-                  sx={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "#0f172a",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {name}
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 0.2,
-                    fontSize: 11,
-                    color: "#94a3b8",
-                  }}
-                >
-                  ID: {id}
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Chip
-              label="Active"
-              size="small"
-              sx={{
-                height: 23,
-                color: "#047857",
-                background: "#ecfdf5",
-                border: "1px solid #a7f3d0",
-                fontSize: 10,
-                fontWeight: 800,
-                flexShrink: 0,
-              }}
-            />
-          </Stack>
-
-          <Divider />
-
-          {/* Customer information */}
-
-          <Stack spacing={1.1}>
-            <InfoLine
-              icon={<EmailOutlinedIcon />}
-              value={email}
-            />
-
-            <InfoLine
-              icon={<PhoneOutlinedIcon />}
-              value={phone}
-            />
-          </Stack>
-
-          {/* Actions */}
-
-          <Stack
-            direction="row"
-            spacing={1}
-          >
-            <Button
-              fullWidth
-              variant="outlined"
-              size="small"
-              startIcon={<VisibilityOutlinedIcon />}
-              onClick={onView}
-              sx={{
-                height: 36,
-                borderRadius: 1.8,
-                textTransform: "none",
-                fontWeight: 700,
-                fontSize: 12,
-              }}
-            >
-              View
-            </Button>
-
-            <IconButton
-              onClick={onEdit}
-              size="small"
-              sx={{
-                width: 36,
-                height: 36,
-                borderRadius: 1.8,
-                border: "1px solid #dbe4f0",
-                color: "#2563eb",
-              }}
-              aria-label="Edit customer"
-            >
-              <EditOutlinedIcon fontSize="small" />
-            </IconButton>
-
-            <IconButton
-              onClick={onDelete}
-              size="small"
-              sx={{
-                width: 36,
-                height: 36,
-                borderRadius: 1.8,
-                border: "1px solid #fecaca",
-                color: "#dc2626",
-              }}
-              aria-label="Delete customer"
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Stack>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* =========================
-   INFO LINE
-========================= */
-
-function InfoLine({ icon, value }) {
-  return (
-    <Stack
-      direction="row"
-      alignItems="center"
-      spacing={1}
-      minWidth={0}
-    >
-      <Box
-        sx={{
-          width: 28,
-          height: 28,
-          borderRadius: 1.5,
-          background: "#f8fafc",
-          color: "#64748b",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </Box>
-
-      <Typography
-        sx={{
-          fontSize: 12,
-          color: "#475569",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {value}
-      </Typography>
-    </Stack>
-  );
-}
-
-/* =========================
-   DETAIL ROW
-========================= */
-
-function DetailRow({
-  icon,
-  label,
-  value,
-}) {
-  return (
-    <Stack
-      direction="row"
-      spacing={1.5}
-      alignItems="flex-start"
-    >
-      <Box
-        sx={{
-          width: 36,
-          height: 36,
-          borderRadius: 1.8,
-          background: "#f8fafc",
-          color: "#2563eb",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </Box>
-
-      <Box minWidth={0}>
-        <Typography
-          sx={{
-            fontSize: 10,
-            fontWeight: 800,
-            color: "#94a3b8",
-            textTransform: "uppercase",
-            letterSpacing: 0.4,
-          }}
-        >
-          {label}
-        </Typography>
-
-        <Typography
-          sx={{
-            mt: 0.3,
-            fontSize: 13,
-            color: "#334155",
-            fontWeight: 600,
-            overflowWrap: "anywhere",
-          }}
-        >
-          {value}
-        </Typography>
-      </Box>
-    </Stack>
-  );
-}
-
-/* =========================
-   EMPTY STATE
-========================= */
-
-function CustomerEmptyState({
-  hasCustomers,
-  onClear,
-  onAdd,
-}) {
-  return (
-    <Box
-      sx={{
-        px: 3,
-        py: 7,
-        textAlign: "center",
-      }}
-    >
-      <Box
-        sx={{
-          width: 60,
-          height: 60,
-          mx: "auto",
-          borderRadius: "50%",
-          background: "#eff6ff",
-          color: "#2563eb",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <PeopleIcon sx={{ fontSize: 30 }} />
-      </Box>
-
-      <Typography
-        sx={{
-          mt: 2,
-          fontSize: 15,
-          fontWeight: 800,
-          color: "#475569",
-        }}
-      >
-        {hasCustomers
-          ? "No matching customers"
-          : "No customers found"}
-      </Typography>
-
-      <Typography
-        sx={{
-          mt: 0.6,
-          fontSize: 12,
-          color: "#94a3b8",
-          maxWidth: 420,
-          mx: "auto",
-        }}
-      >
-        {hasCustomers
-          ? "Try changing your search criteria."
-          : "Start by adding your first customer to the banking system."}
-      </Typography>
-
-      <Stack
-        direction="row"
-        justifyContent="center"
-        spacing={1}
-        sx={{ mt: 2 }}
-      >
-        {hasCustomers ? (
-          <Button
-            onClick={onClear}
-            variant="outlined"
-            sx={{
-              textTransform: "none",
-              fontWeight: 700,
-              borderRadius: 2,
-            }}
-          >
-            Clear Search
-          </Button>
-        ) : (
-          <Button
-            onClick={onAdd}
-            variant="contained"
-            startIcon={<PersonAddAlt1Icon />}
-            sx={{
-              textTransform: "none",
-              fontWeight: 700,
-              borderRadius: 2,
-              boxShadow: "none",
-            }}
-          >
-            Add Customer
-          </Button>
-        )}
-      </Stack>
-    </Box>
-  );
-}
-
-export default Customers;
+export default Customers; 
