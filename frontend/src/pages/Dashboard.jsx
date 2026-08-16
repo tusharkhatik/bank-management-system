@@ -1196,9 +1196,6 @@ function Dashboard() {
                     borderRadius: 1.5,
                   },
                 }}
-                InputLabelProps={undefined}
-                InputProps={undefined}
-                inputProps={undefined}
               />
 
               <TextField

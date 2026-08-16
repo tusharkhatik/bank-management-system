@@ -1,6 +1,6 @@
 package com.bank.bankmanagement.config;
 
-import com.bank.bankmanagement.security.JwtUtil;
+import com.bank.bankmanagement.service.JwtService;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,10 +19,10 @@ import java.util.List;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtUtil jwtUtil;
+    private final JwtService jwtService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
-        this.jwtUtil = jwtUtil;
+    public JwtAuthenticationFilter(JwtService jwtService) {
+        this.jwtService = jwtService;
     }
 
     @Override
@@ -42,19 +42,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String token = authorizationHeader.substring(7).trim();
+        String token =
+                authorizationHeader.substring(7).trim();
+
+        if (token.isBlank()) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         try {
 
-            if (jwtUtil.isTokenValid(token)) {
+            if (jwtService.isTokenValid(token)) {
 
                 String username =
-                        jwtUtil.extractUsername(token);
+                        jwtService.extractUsername(token);
 
                 String role =
-                        jwtUtil.extractRole(token);
+                        jwtService.extractRole(token);
 
-                if (username != null && role != null) {
+                if (username != null
+                        && !username.isBlank()
+                        && role != null
+                        && !role.isBlank()
+                        && SecurityContextHolder
+                                .getContext()
+                                .getAuthentication() == null) {
 
                     String normalizedRole =
                             role.startsWith("ROLE_")
@@ -83,9 +95,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.clearContext();
 
-            System.out.println(
+            // Do not expose JWT details to the client.
+            System.err.println(
                     "JWT authentication failed: "
-                            + e.getMessage()
+                            + e.getClass().getSimpleName()
             );
         }
 

@@ -15,9 +15,18 @@ api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
 
+    config.headers = config.headers || {};
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    console.log("API REQUEST:", {
+      method: config.method,
+      url: config.url,
+      hasToken: Boolean(token),
+      hasAuthorizationHeader: Boolean(config.headers.Authorization),
+    });
 
     return config;
   },

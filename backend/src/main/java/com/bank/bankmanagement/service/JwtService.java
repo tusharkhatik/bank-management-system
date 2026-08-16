@@ -14,9 +14,25 @@ import java.util.Date;
 @Service
 public class JwtService {
 
+    private static final long TOKEN_EXPIRATION_MS =
+            1000L * 60 * 60;
+
     private final SecretKey secretKey;
 
     public JwtService(@Value("${jwt.secret}") String secret) {
+
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT_SECRET is not configured"
+            );
+        }
+
+        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException(
+                    "JWT_SECRET must be at least 32 bytes long"
+            );
+        }
+
         this.secretKey = Keys.hmacShaKeyFor(
                 secret.getBytes(StandardCharsets.UTF_8)
         );
@@ -26,10 +42,13 @@ public class JwtService {
 
         return Jwts.builder()
                 .subject(user.getUsername())
-                .claim("role", user.getRole())
+                .claim("role", normalizeRole(user.getRole()))
                 .issuedAt(new Date())
                 .expiration(
-                        new Date(System.currentTimeMillis() + 1000L * 60 * 60)
+                        new Date(
+                                System.currentTimeMillis()
+                                        + TOKEN_EXPIRATION_MS
+                        )
                 )
                 .signWith(secretKey)
                 .compact();
@@ -40,11 +59,14 @@ public class JwtService {
     }
 
     public String extractRole(String token) {
-        return getClaims(token).get("role", String.class);
+        return getClaims(token)
+                .get("role", String.class);
     }
 
     public boolean isTokenValid(String token) {
+
         try {
+
             Claims claims = getClaims(token);
 
             return claims.getSubject() != null
@@ -52,6 +74,7 @@ public class JwtService {
                     && claims.getExpiration().after(new Date());
 
         } catch (Exception e) {
+
             return false;
         }
     }
@@ -63,5 +86,16 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    private String normalizeRole(String role) {
+
+        if (role == null) {
+            return null;
+        }
+
+        return role.startsWith("ROLE_")
+                ? role.substring(5)
+                : role;
     }
 }
