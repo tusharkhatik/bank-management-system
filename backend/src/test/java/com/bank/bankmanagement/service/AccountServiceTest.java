@@ -1,10 +1,13 @@
 package com.bank.bankmanagement.service;
 
+import com.bank.bankmanagement.dto.AccountResponse;
 import com.bank.bankmanagement.dto.TransferRequest;
 import com.bank.bankmanagement.exception.InsufficientFundsException;
 import com.bank.bankmanagement.model.Account;
+import com.bank.bankmanagement.model.Customer;
 import com.bank.bankmanagement.model.Transaction;
 import com.bank.bankmanagement.repository.AccountRepository;
+import com.bank.bankmanagement.repository.CustomerRepository;
 import com.bank.bankmanagement.repository.TransactionRepository;
 
 import org.junit.jupiter.api.Test;
@@ -33,24 +36,39 @@ public class AccountServiceTest {
     @Mock
     TransactionRepository transactionRepository;
 
+    @Mock
+    CustomerRepository customerRepository;
+
     @InjectMocks
     AccountService accountService;
+
+    // =========================================================
+    // DEPOSIT SUCCESS
+    // =========================================================
 
     @Test
     public void deposit_success() {
 
+        Customer customer = new Customer();
+        customer.setId(2L);
+        customer.setName("Tushar Khatik");
+        customer.setEmail("tushar@example.com");
+        customer.setPhone("9876543210");
+
         Account account =
-                new Account("ACC1", BigDecimal.valueOf(100), null);
+                new Account(
+                        "ACC1",
+                        BigDecimal.valueOf(100),
+                        customer
+                );
 
-        account.setBalance(BigDecimal.valueOf(100));
-
-        when(accountRepository.findById(1L))
+        when(accountRepository.findByIdWithCustomer(1L))
                 .thenReturn(Optional.of(account));
 
-        when(accountRepository.save(any()))
+        when(accountRepository.save(any(Account.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        Account updated =
+        AccountResponse updated =
                 accountService.deposit(
                         1L,
                         BigDecimal.valueOf(50)
@@ -62,17 +80,41 @@ public class AccountServiceTest {
                         .compareTo(BigDecimal.valueOf(150))
         );
 
+        assertEquals(
+                2L,
+                updated.getCustomerId()
+        );
+
+        assertEquals(
+                "Tushar Khatik",
+                updated.getCustomerName()
+        );
+
         verify(transactionRepository, times(1))
                 .save(any(Transaction.class));
     }
 
+    // =========================================================
+    // WITHDRAW INSUFFICIENT
+    // =========================================================
+
     @Test
     public void withdraw_insufficient() {
 
-        Account account =
-                new Account("ACC1", BigDecimal.valueOf(100), null);
+        Customer customer = new Customer();
+        customer.setId(2L);
+        customer.setName("Tushar Khatik");
+        customer.setEmail("tushar@example.com");
+        customer.setPhone("9876543210");
 
-        when(accountRepository.findById(1L))
+        Account account =
+                new Account(
+                        "ACC1",
+                        BigDecimal.valueOf(100),
+                        customer
+                );
+
+        when(accountRepository.findByIdWithCustomer(1L))
                 .thenReturn(Optional.of(account));
 
         InsufficientFundsException ex =
@@ -89,32 +131,40 @@ public class AccountServiceTest {
         );
     }
 
+    // =========================================================
+    // TRANSFER SUCCESS
+    // =========================================================
+
     @Test
     public void transfer_success() {
+
+        Customer customer = new Customer();
+        customer.setId(2L);
+        customer.setName("Tushar Khatik");
+        customer.setEmail("tushar@example.com");
+        customer.setPhone("9876543210");
 
         Account from =
                 new Account(
                         "FROM",
                         BigDecimal.valueOf(200),
-                        null
+                        customer
                 );
-
-        from.setBalance(BigDecimal.valueOf(200));
 
         Account to =
                 new Account(
                         "TO",
                         BigDecimal.valueOf(50),
-                        null
+                        customer
                 );
 
-        when(accountRepository.findById(1L))
+        when(accountRepository.findByIdWithCustomer(1L))
                 .thenReturn(Optional.of(from));
 
-        when(accountRepository.findById(2L))
+        when(accountRepository.findByIdWithCustomer(2L))
                 .thenReturn(Optional.of(to));
 
-        when(accountRepository.save(any()))
+        when(accountRepository.save(any(Account.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         TransferRequest request =

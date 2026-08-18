@@ -1,8 +1,8 @@
 package com.bank.bankmanagement.controller;
 
 import com.bank.bankmanagement.dto.AccountRequest;
+import com.bank.bankmanagement.dto.AccountResponse;
 import com.bank.bankmanagement.dto.TransferRequest;
-import com.bank.bankmanagement.model.Account;
 import com.bank.bankmanagement.service.AccountService;
 
 import org.springframework.http.ResponseEntity;
@@ -21,46 +21,69 @@ public class AccountController {
         this.accountService = accountService;
     }
 
-    // Create account
+    // =========================================================
+    // CREATE ACCOUNT
+    // =========================================================
+
     @PostMapping
-    public Account createAccount(@RequestBody AccountRequest request) {
+    public AccountResponse createAccount(
+            @RequestBody AccountRequest request) {
+
         return accountService.createAccount(request);
     }
 
-    // Get all accounts
+    // =========================================================
+    // GET ALL ACCOUNTS
+    // =========================================================
+
     @GetMapping
-    public List<Account> getAllAccounts() {
+    public List<AccountResponse> getAllAccounts() {
+
         return accountService.getAllAccounts();
     }
 
-    // Get account by ID
-    @GetMapping("/{id}")
-    public ResponseEntity<Account> getAccountById(@PathVariable Long id) {
+    // =========================================================
+    // GET ACCOUNT BY ID
+    // =========================================================
 
-        Account account = accountService.getAccountById(id);
+    @GetMapping("/{id}")
+    public ResponseEntity<AccountResponse> getAccountById(
+            @PathVariable Long id) {
+
+        AccountResponse account =
+                accountService.getAccountById(id);
 
         return ResponseEntity.ok(account);
     }
 
-    // Deposit
+    // =========================================================
+    // DEPOSIT
+    // =========================================================
+
     @PostMapping("/{id}/deposit")
-    public Account deposit(
+    public AccountResponse deposit(
             @PathVariable Long id,
             @RequestParam BigDecimal amount) {
 
         return accountService.deposit(id, amount);
     }
 
-    // Withdraw
+    // =========================================================
+    // WITHDRAW
+    // =========================================================
+
     @PostMapping("/{id}/withdraw")
-    public Account withdraw(
+    public AccountResponse withdraw(
             @PathVariable Long id,
             @RequestParam BigDecimal amount) {
 
         return accountService.withdraw(id, amount);
     }
 
-    // Transfer
+    // =========================================================
+    // TRANSFER
+    // =========================================================
+
     @PostMapping("/transfer")
     public ResponseEntity<String> transfer(
             @RequestBody TransferRequest request) {
@@ -70,18 +93,25 @@ public class AccountController {
         return ResponseEntity.ok("Transfer successful");
     }
 
-    // Update account
+    // =========================================================
+    // UPDATE ACCOUNT
+    // =========================================================
+
     @PutMapping("/{id}")
-    public Account updateAccount(
+    public AccountResponse updateAccount(
             @PathVariable Long id,
-            @RequestBody Account account) {
+            @RequestBody com.bank.bankmanagement.model.Account account) {
 
         return accountService.updateAccount(id, account);
     }
 
-    // Delete account
+    // =========================================================
+    // DELETE ACCOUNT
+    // =========================================================
+
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteAccount(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteAccount(
+            @PathVariable Long id) {
 
         accountService.deleteAccount(id);
 

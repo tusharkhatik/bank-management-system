@@ -1,6 +1,7 @@
 package com.bank.bankmanagement.service;
 
 import com.bank.bankmanagement.dto.AccountRequest;
+import com.bank.bankmanagement.dto.AccountResponse;
 import com.bank.bankmanagement.dto.TransferRequest;
 import com.bank.bankmanagement.exception.BadRequestException;
 import com.bank.bankmanagement.exception.InsufficientFundsException;
@@ -35,16 +36,16 @@ public class AccountService {
         this.customerRepository = customerRepository;
     }
 
+    // =========================================================
+    // DEPOSIT
+    // =========================================================
+
     @Transactional
-    public Account deposit(Long id, BigDecimal amount) {
+    public AccountResponse deposit(Long id, BigDecimal amount) {
 
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadRequestException(
-                    "Deposit amount must be greater than zero"
-            );
-        }
+        validateAmount(amount, "Deposit");
 
-        Account account = accountRepository.findById(id)
+        Account account = accountRepository.findByIdWithCustomer(id)
                 .orElseThrow(() ->
                         new NotFoundException("Account not found"));
 
@@ -63,19 +64,19 @@ public class AccountService {
 
         transactionRepository.save(transaction);
 
-        return savedAccount;
+        return toAccountResponse(savedAccount);
     }
 
+    // =========================================================
+    // WITHDRAW
+    // =========================================================
+
     @Transactional
-    public Account withdraw(Long id, BigDecimal amount) {
+    public AccountResponse withdraw(Long id, BigDecimal amount) {
 
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadRequestException(
-                    "Withdrawal amount must be greater than zero"
-            );
-        }
+        validateAmount(amount, "Withdrawal");
 
-        Account account = accountRepository.findById(id)
+        Account account = accountRepository.findByIdWithCustomer(id)
                 .orElseThrow(() ->
                         new NotFoundException("Account not found"));
 
@@ -100,8 +101,12 @@ public class AccountService {
 
         transactionRepository.save(transaction);
 
-        return savedAccount;
+        return toAccountResponse(savedAccount);
     }
+
+    // =========================================================
+    // TRANSFER
+    // =========================================================
 
     @Transactional
     public void transfer(TransferRequest request) {
@@ -116,7 +121,9 @@ public class AccountService {
             );
         }
 
-        if (request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = request.getAmount();
+
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException(
                     "Transfer amount must be greater than zero"
             );
@@ -130,21 +137,25 @@ public class AccountService {
             );
         }
 
-        Account fromAccount = accountRepository
-                .findById(request.getFromAccountId())
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                "Sender account not found"
-                        ));
+        Account fromAccount =
+                accountRepository
+                        .findByIdWithCustomer(
+                                request.getFromAccountId()
+                        )
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Sender account not found"
+                                ));
 
-        Account toAccount = accountRepository
-                .findById(request.getToAccountId())
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                "Receiver account not found"
-                        ));
-
-        BigDecimal amount = request.getAmount();
+        Account toAccount =
+                accountRepository
+                        .findByIdWithCustomer(
+                                request.getToAccountId()
+                        )
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Receiver account not found"
+                                ));
 
         if (fromAccount.getBalance()
                 .compareTo(amount) < 0) {
@@ -155,11 +166,13 @@ public class AccountService {
         }
 
         fromAccount.setBalance(
-                fromAccount.getBalance().subtract(amount)
+                fromAccount.getBalance()
+                        .subtract(amount)
         );
 
         toAccount.setBalance(
-                toAccount.getBalance().add(amount)
+                toAccount.getBalance()
+                        .add(amount)
         );
 
         accountRepository.save(fromAccount);
@@ -175,7 +188,18 @@ public class AccountService {
         transactionRepository.save(transaction);
     }
 
-    public Account createAccount(AccountRequest request) {
+    // =========================================================
+    // CREATE ACCOUNT
+    // =========================================================
+
+    @Transactional
+    public AccountResponse createAccount(AccountRequest request) {
+
+        if (request == null) {
+            throw new BadRequestException(
+                    "Account request is required"
+            );
+        }
 
         if (request.getCustomerId() == null) {
             throw new BadRequestException(
@@ -183,12 +207,21 @@ public class AccountService {
             );
         }
 
-        Customer customer = customerRepository
-                .findById(request.getCustomerId())
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                "Customer not found"
-                        ));
+        if (request.getAccountNumber() == null ||
+                request.getAccountNumber().trim().isEmpty()) {
+
+            throw new BadRequestException(
+                    "Account number is required"
+            );
+        }
+
+        Customer customer =
+                customerRepository
+                        .findById(request.getCustomerId())
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Customer not found"
+                                ));
 
         BigDecimal balance = request.getBalance();
 
@@ -196,43 +229,97 @@ public class AccountService {
             balance = BigDecimal.ZERO;
         }
 
+        if (balance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BadRequestException(
+                    "Initial balance cannot be negative"
+            );
+        }
+
         Account account = new Account(
-                request.getAccountNumber(),
+                request.getAccountNumber().trim(),
                 balance,
                 customer
         );
 
-        return accountRepository.save(account);
+        Account savedAccount = accountRepository.save(account);
+
+        return toAccountResponse(savedAccount);
     }
 
-    public List<Account> getAllAccounts() {
-        return accountRepository.findAll();
+    // =========================================================
+    // GET ALL ACCOUNTS
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<AccountResponse> getAllAccounts() {
+
+        return accountRepository.findAllWithCustomer()
+                .stream()
+                .map(this::toAccountResponse)
+                .toList();
     }
 
-    public Account getAccountById(Long id) {
+    // =========================================================
+    // GET ACCOUNT BY ID
+    // =========================================================
 
-        return accountRepository.findById(id)
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                "Account not found"
-                        ));
+    @Transactional(readOnly = true)
+    public AccountResponse getAccountById(Long id) {
+
+        Account account =
+                accountRepository.findByIdWithCustomer(id)
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Account not found"
+                                ));
+
+        return toAccountResponse(account);
     }
 
-    public Account updateAccount(
+    // =========================================================
+    // UPDATE ACCOUNT
+    // =========================================================
+
+    @Transactional
+    public AccountResponse updateAccount(
             Long id,
             Account accountDetails) {
 
-        Account account = accountRepository.findById(id)
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                "Account not found"
-                        ));
+        if (accountDetails == null) {
+            throw new BadRequestException(
+                    "Account details are required"
+            );
+        }
 
-        account.setAccountNumber(
-                accountDetails.getAccountNumber()
-        );
+        Account account =
+                accountRepository.findByIdWithCustomer(id)
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Account not found"
+                                ));
+
+        if (accountDetails.getAccountNumber() != null &&
+                !accountDetails.getAccountNumber()
+                        .trim()
+                        .isEmpty()) {
+
+            account.setAccountNumber(
+                    accountDetails
+                            .getAccountNumber()
+                            .trim()
+            );
+        }
 
         if (accountDetails.getBalance() != null) {
+
+            if (accountDetails.getBalance()
+                    .compareTo(BigDecimal.ZERO) < 0) {
+
+                throw new BadRequestException(
+                        "Balance cannot be negative"
+                );
+            }
+
             account.setBalance(
                     accountDetails.getBalance()
             );
@@ -242,29 +329,78 @@ public class AccountService {
                 accountDetails.getCustomer().getId() != null) {
 
             Long customerId =
-                    accountDetails.getCustomer().getId();
+                    accountDetails
+                            .getCustomer()
+                            .getId();
 
-            Customer customer = customerRepository
-                    .findById(customerId)
-                    .orElseThrow(() ->
-                            new NotFoundException(
-                                    "Customer not found"
-                            ));
+            Customer customer =
+                    customerRepository
+                            .findById(customerId)
+                            .orElseThrow(() ->
+                                    new NotFoundException(
+                                            "Customer not found"
+                                    ));
 
             account.setCustomer(customer);
         }
 
-        return accountRepository.save(account);
+        Account savedAccount =
+                accountRepository.save(account);
+
+        return toAccountResponse(savedAccount);
     }
 
+    // =========================================================
+    // DELETE ACCOUNT
+    // =========================================================
+
+    @Transactional
     public void deleteAccount(Long id) {
 
-        Account account = accountRepository.findById(id)
-                .orElseThrow(() ->
-                        new NotFoundException(
-                                "Account not found"
-                        ));
+        Account account =
+                accountRepository.findById(id)
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Account not found"
+                                ));
 
         accountRepository.delete(account);
+    }
+
+    // =========================================================
+    // ACCOUNT RESPONSE MAPPER
+    // =========================================================
+
+    private AccountResponse toAccountResponse(Account account) {
+
+        Customer customer = account.getCustomer();
+
+        return new AccountResponse(
+                account.getId(),
+                account.getAccountNumber(),
+                account.getBalance(),
+                customer.getId(),
+                customer.getName(),
+                customer.getEmail(),
+                customer.getPhone()
+        );
+    }
+
+    // =========================================================
+    // VALIDATE AMOUNT
+    // =========================================================
+
+    private void validateAmount(
+            BigDecimal amount,
+            String operation) {
+
+        if (amount == null ||
+                amount.compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new BadRequestException(
+                    operation +
+                    " amount must be greater than zero"
+            );
+        }
     }
 }

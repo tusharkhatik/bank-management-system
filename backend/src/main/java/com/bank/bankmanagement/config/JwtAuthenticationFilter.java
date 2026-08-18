@@ -35,6 +35,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String authorizationHeader =
                 request.getHeader("Authorization");
 
+        /*
+         * =====================================================
+         * Authorization header check
+         * =====================================================
+         */
         if (authorizationHeader == null
                 || !authorizationHeader.startsWith("Bearer ")) {
 
@@ -42,6 +47,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        /*
+         * =====================================================
+         * Extract JWT token
+         * =====================================================
+         */
         String token =
                 authorizationHeader.substring(7).trim();
 
@@ -50,16 +60,72 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        /*
+         * =====================================================
+         * JWT DEBUG
+         * =====================================================
+         */
+        System.out.println("========== JWT DEBUG ==========");
+        System.out.println(
+                "Request: "
+                        + request.getMethod()
+                        + " "
+                        + request.getRequestURI()
+        );
+
+        System.out.println(
+                "Authorization header present: "
+                        + (authorizationHeader != null)
+        );
+
+        System.out.println(
+                "Token length: "
+                        + token.length()
+        );
+
         try {
 
-            if (jwtService.isTokenValid(token)) {
+            /*
+             * =================================================
+             * Validate JWT
+             * =================================================
+             */
+            boolean tokenValid =
+                    jwtService.isTokenValid(token);
 
+            System.out.println(
+                    "Token valid: "
+                            + tokenValid
+            );
+
+            if (tokenValid) {
+
+                /*
+                 * =============================================
+                 * Extract username and role
+                 * =============================================
+                 */
                 String username =
                         jwtService.extractUsername(token);
 
                 String role =
                         jwtService.extractRole(token);
 
+                System.out.println(
+                        "JWT username: "
+                                + username
+                );
+
+                System.out.println(
+                        "JWT role: "
+                                + role
+                );
+
+                /*
+                 * =============================================
+                 * Create Spring Security authentication
+                 * =============================================
+                 */
                 if (username != null
                         && !username.isBlank()
                         && role != null
@@ -88,20 +154,75 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder
                             .getContext()
                             .setAuthentication(authentication);
+
+                    System.out.println(
+                            "JWT AUTHENTICATION SET SUCCESSFULLY"
+                    );
+
+                    System.out.println(
+                            "Authenticated user: "
+                                    + username
+                    );
+
+                    System.out.println(
+                            "Granted authority: ROLE_"
+                                    + normalizedRole
+                    );
                 }
+
+            } else {
+
+                System.out.println(
+                        "JWT TOKEN IS INVALID OR EXPIRED"
+                );
             }
+
+            System.out.println(
+                    "SecurityContext authentication: "
+                            + SecurityContextHolder
+                                    .getContext()
+                                    .getAuthentication()
+            );
+
+            System.out.println(
+                    "==============================="
+            );
 
         } catch (Exception e) {
 
+            /*
+             * =================================================
+             * JWT authentication failure
+             * =================================================
+             */
             SecurityContextHolder.clearContext();
 
-            // Do not expose JWT details to the client.
             System.err.println(
-                    "JWT authentication failed: "
-                            + e.getClass().getSimpleName()
+                    "========== JWT AUTHENTICATION FAILED =========="
+            );
+
+            System.err.println(
+                    "Exception: "
+                            + e.getClass().getName()
+            );
+
+            System.err.println(
+                    "Message: "
+                            + e.getMessage()
+            );
+
+            e.printStackTrace();
+
+            System.err.println(
+                    "================================================"
             );
         }
 
+        /*
+         * =====================================================
+         * Continue filter chain
+         * =====================================================
+         */
         filterChain.doFilter(request, response);
     }
 }

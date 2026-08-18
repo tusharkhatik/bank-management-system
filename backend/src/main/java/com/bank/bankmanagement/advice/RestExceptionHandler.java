@@ -84,14 +84,29 @@ public class RestExceptionHandler {
         );
     }
 
+    /*
+     * =========================================================
+     * GLOBAL EXCEPTION HANDLER
+     * =========================================================
+     *
+     * Temporarily exposes the actual exception so we can find
+     * the real cause of the /api/accounts HTTP 500 error.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleOther(
             Exception ex,
             WebRequest req) {
 
+        ex.printStackTrace();
+
+        String message =
+                ex.getClass().getName()
+                        + ": "
+                        + ex.getMessage();
+
         return buildResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,
-                "Internal server error",
+                message,
                 req
         );
     }
