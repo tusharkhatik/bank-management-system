@@ -23,4 +23,17 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             WHERE a.id = :id
             """)
     Optional<Account> findByIdWithCustomer(Long id);
+
+    @Query("""
+            SELECT a
+            FROM Account a
+            JOIN FETCH a.customer c
+            JOIN c.user u
+            WHERE a.id = :id
+            AND u.username = :username
+            """)
+    Optional<Account> findByIdAndOwnerUsername(
+            Long id,
+            String username
+    );
 }
