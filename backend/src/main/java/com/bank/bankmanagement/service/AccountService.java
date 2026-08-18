@@ -7,6 +7,8 @@ import com.bank.bankmanagement.exception.BadRequestException;
 import com.bank.bankmanagement.exception.InsufficientFundsException;
 import com.bank.bankmanagement.exception.NotFoundException;
 import com.bank.bankmanagement.model.Account;
+import com.bank.bankmanagement.model.AccountStatus;
+import com.bank.bankmanagement.model.AccountType;
 import com.bank.bankmanagement.model.Customer;
 import com.bank.bankmanagement.model.Transaction;
 import com.bank.bankmanagement.repository.AccountRepository;
@@ -49,6 +51,8 @@ public class AccountService {
                 .orElseThrow(() ->
                         new NotFoundException("Account not found"));
 
+        validateAccountActive(account);
+
         account.setBalance(
                 account.getBalance().add(amount)
         );
@@ -79,6 +83,8 @@ public class AccountService {
         Account account = accountRepository.findByIdWithCustomer(id)
                 .orElseThrow(() ->
                         new NotFoundException("Account not found"));
+
+        validateAccountActive(account);
 
         if (account.getBalance().compareTo(amount) < 0) {
             throw new InsufficientFundsException(
@@ -156,6 +162,9 @@ public class AccountService {
                                 new NotFoundException(
                                         "Receiver account not found"
                                 ));
+
+        validateAccountActive(fromAccount);
+        validateAccountActive(toAccount);
 
         if (fromAccount.getBalance()
                 .compareTo(amount) < 0) {
@@ -351,6 +360,87 @@ public class AccountService {
     }
 
     // =========================================================
+    // ACCOUNT STATUS MANAGEMENT
+    // =========================================================
+
+    @Transactional
+    public AccountResponse blockAccount(Long id) {
+
+        Account account = accountRepository.findByIdWithCustomer(id)
+                .orElseThrow(() ->
+                        new NotFoundException("Account not found"));
+
+        if (account.getStatus() == AccountStatus.CLOSED) {
+            throw new BadRequestException(
+                    "Closed account cannot be blocked"
+            );
+        }
+
+        account.setStatus(AccountStatus.BLOCKED);
+
+        return toAccountResponse(
+                accountRepository.save(account)
+        );
+    }
+
+    @Transactional
+    public AccountResponse unblockAccount(Long id) {
+
+        Account account = accountRepository.findByIdWithCustomer(id)
+                .orElseThrow(() ->
+                        new NotFoundException("Account not found"));
+
+        if (account.getStatus() == AccountStatus.CLOSED) {
+            throw new BadRequestException(
+                    "Closed account cannot be unblocked"
+            );
+        }
+
+        account.setStatus(AccountStatus.ACTIVE);
+
+        return toAccountResponse(
+                accountRepository.save(account)
+        );
+    }
+
+    @Transactional
+    public AccountResponse closeAccount(Long id) {
+
+        Account account = accountRepository.findByIdWithCustomer(id)
+                .orElseThrow(() ->
+                        new NotFoundException("Account not found"));
+
+        if (account.getStatus() == AccountStatus.CLOSED) {
+            throw new BadRequestException(
+                    "Account is already closed"
+            );
+        }
+
+        if (account.getBalance().compareTo(BigDecimal.ZERO) != 0) {
+            throw new BadRequestException(
+                    "Account balance must be zero before closing"
+            );
+        }
+
+        account.setStatus(AccountStatus.CLOSED);
+
+        return toAccountResponse(
+                accountRepository.save(account)
+        );
+    }
+
+    private void validateAccountActive(Account account) {
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new BadRequestException(
+                    "Account is " +
+                    account.getStatus().name().toLowerCase() +
+                    " and cannot perform this transaction"
+            );
+        }
+    }
+
+    // =========================================================
     // DELETE ACCOUNT
     // =========================================================
 
@@ -379,6 +469,8 @@ public class AccountService {
                 account.getId(),
                 account.getAccountNumber(),
                 account.getBalance(),
+                account.getAccountType(),
+                account.getStatus(),
                 customer.getId(),
                 customer.getName(),
                 customer.getEmail(),

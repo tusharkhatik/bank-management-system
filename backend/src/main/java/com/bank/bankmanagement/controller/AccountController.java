@@ -106,6 +106,39 @@ public class AccountController {
     }
 
     // =========================================================
+    // BLOCK ACCOUNT
+    // =========================================================
+
+    @PatchMapping("/{id}/block")
+    public AccountResponse blockAccount(
+            @PathVariable Long id) {
+
+        return accountService.blockAccount(id);
+    }
+
+    // =========================================================
+    // UNBLOCK ACCOUNT
+    // =========================================================
+
+    @PatchMapping("/{id}/unblock")
+    public AccountResponse unblockAccount(
+            @PathVariable Long id) {
+
+        return accountService.unblockAccount(id);
+    }
+
+    // =========================================================
+    // CLOSE ACCOUNT
+    // =========================================================
+
+    @PatchMapping("/{id}/close")
+    public AccountResponse closeAccount(
+            @PathVariable Long id) {
+
+        return accountService.closeAccount(id);
+    }
+
+    // =========================================================
     // DELETE ACCOUNT
     // =========================================================
 

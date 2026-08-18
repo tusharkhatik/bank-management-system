@@ -1,5 +1,8 @@
 package com.bank.bankmanagement.dto;
 
+import com.bank.bankmanagement.model.AccountStatus;
+import com.bank.bankmanagement.model.AccountType;
+
 import java.math.BigDecimal;
 
 public class AccountResponse {
@@ -7,6 +10,9 @@ public class AccountResponse {
     private Long id;
     private String accountNumber;
     private BigDecimal balance;
+
+    private AccountType accountType;
+    private AccountStatus status;
 
     private Long customerId;
     private String customerName;
@@ -20,6 +26,8 @@ public class AccountResponse {
             Long id,
             String accountNumber,
             BigDecimal balance,
+            AccountType accountType,
+            AccountStatus status,
             Long customerId,
             String customerName,
             String customerEmail,
@@ -28,6 +36,8 @@ public class AccountResponse {
         this.id = id;
         this.accountNumber = accountNumber;
         this.balance = balance;
+        this.accountType = accountType;
+        this.status = status;
         this.customerId = customerId;
         this.customerName = customerName;
         this.customerEmail = customerEmail;
@@ -44,6 +54,14 @@ public class AccountResponse {
 
     public BigDecimal getBalance() {
         return balance;
+    }
+
+    public AccountType getAccountType() {
+        return accountType;
+    }
+
+    public AccountStatus getStatus() {
+        return status;
     }
 
     public Long getCustomerId() {

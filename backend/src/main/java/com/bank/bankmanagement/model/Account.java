@@ -7,7 +7,10 @@ import java.math.BigDecimal;
 @Table(
     name = "accounts",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_account_number", columnNames = "account_number")
+        @UniqueConstraint(
+            name = "uk_account_number",
+            columnNames = "account_number"
+        )
     }
 )
 public class Account {
@@ -22,6 +25,14 @@ public class Account {
     @Column(precision = 19, scale = 4, nullable = false)
     private BigDecimal balance = BigDecimal.ZERO;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 20)
+    private AccountType accountType = AccountType.SAVINGS;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private AccountStatus status = AccountStatus.ACTIVE;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
@@ -32,10 +43,18 @@ public class Account {
     public Account() {
     }
 
-    public Account(String accountNumber, BigDecimal balance, Customer customer) {
+    public Account(
+            String accountNumber,
+            BigDecimal balance,
+            Customer customer) {
+
         this.accountNumber = accountNumber;
-        this.balance = balance == null ? BigDecimal.ZERO : balance;
+        this.balance = balance == null
+                ? BigDecimal.ZERO
+                : balance;
         this.customer = customer;
+        this.accountType = AccountType.SAVINGS;
+        this.status = AccountStatus.ACTIVE;
     }
 
     public Long getId() {
@@ -55,7 +74,25 @@ public class Account {
     }
 
     public void setBalance(BigDecimal balance) {
-        this.balance = balance == null ? BigDecimal.ZERO : balance;
+        this.balance = balance == null
+                ? BigDecimal.ZERO
+                : balance;
+    }
+
+    public AccountType getAccountType() {
+        return accountType;
+    }
+
+    public void setAccountType(AccountType accountType) {
+        this.accountType = accountType;
+    }
+
+    public AccountStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(AccountStatus status) {
+        this.status = status;
     }
 
     public Customer getCustomer() {
