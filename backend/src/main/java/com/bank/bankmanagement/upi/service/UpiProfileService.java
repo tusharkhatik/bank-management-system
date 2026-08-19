@@ -1,5 +1,7 @@
 package com.bank.bankmanagement.upi.service;
 
+import com.bank.bankmanagement.model.Account;
+import com.bank.bankmanagement.repository.AccountRepository;
 import com.bank.bankmanagement.upi.dto.CreateUpiProfileRequest;
 import com.bank.bankmanagement.upi.model.UpiProfile;
 import com.bank.bankmanagement.upi.repository.UpiProfileRepository;
@@ -13,9 +15,14 @@ import java.util.Locale;
 public class UpiProfileService {
 
     private final UpiProfileRepository upiProfileRepository;
+    private final AccountRepository accountRepository;
 
-    public UpiProfileService(UpiProfileRepository upiProfileRepository) {
+    public UpiProfileService(
+            UpiProfileRepository upiProfileRepository,
+            AccountRepository accountRepository) {
+
         this.upiProfileRepository = upiProfileRepository;
+        this.accountRepository = accountRepository;
     }
 
     public UpiProfile createProfile(CreateUpiProfileRequest request) {
@@ -69,7 +76,7 @@ public class UpiProfileService {
             );
         }
 
-        if (upiProfileRepository.existsByAccountId(
+        if (upiProfileRepository.existsByAccount_Id(
                 request.getAccountId())) {
 
             throw new ResponseStatusException(
@@ -78,10 +85,20 @@ public class UpiProfileService {
             );
         }
 
+        Account account =
+                accountRepository.findByIdWithCustomer(
+                        request.getAccountId()
+                ).orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Account not found"
+                        )
+                );
+
         UpiProfile profile = new UpiProfile(
                 upiId,
                 request.getDisplayName().trim(),
-                request.getAccountId()
+                account
         );
 
         return upiProfileRepository.save(profile);
@@ -120,7 +137,7 @@ public class UpiProfileService {
         }
 
         return upiProfileRepository
-                .findByAccountId(accountId)
+                .findByAccount_Id(accountId)
                 .orElseThrow(() ->
                         new ResponseStatusException(
                                 HttpStatus.NOT_FOUND,

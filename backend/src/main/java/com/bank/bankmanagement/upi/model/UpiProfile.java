@@ -1,5 +1,6 @@
 package com.bank.bankmanagement.upi.model;
 
+import com.bank.bankmanagement.model.Account;
 import jakarta.persistence.*;
 
 @Entity
@@ -22,24 +23,24 @@ public class UpiProfile {
     @Column(name = "display_name", nullable = false, length = 100)
     private String displayName;
 
-    @Column(name = "account_id", nullable = false, unique = true)
-    private Long accountId;
-
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "account_id", nullable = false, unique = true)
+    private Account account;
     @Column(nullable = false)
     private boolean active = true;
 
     public UpiProfile() {
     }
 
-    public UpiProfile(
-            String upiId,
-            String displayName,
-            Long accountId
-    ) {
+    public UpiProfile(String upiId, String displayName, Account account) {
         this.upiId = upiId;
         this.displayName = displayName;
-        this.accountId = accountId;
+        this.account = account;
         this.active = true;
+    }
+
+    public Long getAccountId() {
+        return account != null ? account.getId() : null;
     }
 
     public Long getId() {
@@ -62,12 +63,12 @@ public class UpiProfile {
         this.displayName = displayName;
     }
 
-    public Long getAccountId() {
-        return accountId;
+    public Account getAccount() {
+        return account;
     }
 
-    public void setAccountId(Long accountId) {
-        this.accountId = accountId;
+    public void setAccount(Account account) {
+        this.account = account;
     }
 
     public boolean isActive() {

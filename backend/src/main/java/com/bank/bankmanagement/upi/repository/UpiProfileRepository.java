@@ -9,9 +9,9 @@ public interface UpiProfileRepository extends JpaRepository<UpiProfile, Long> {
 
     Optional<UpiProfile> findByUpiId(String upiId);
 
-    Optional<UpiProfile> findByAccountId(Long accountId);
+    Optional<UpiProfile> findByAccount_Id(Long accountId);
 
     boolean existsByUpiId(String upiId);
 
-    boolean existsByAccountId(Long accountId);
+    boolean existsByAccount_Id(Long accountId);
 }

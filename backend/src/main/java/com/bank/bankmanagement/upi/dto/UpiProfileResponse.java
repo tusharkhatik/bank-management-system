@@ -17,7 +17,7 @@ public class UpiProfileResponse {
         this.id = profile.getId();
         this.upiId = profile.getUpiId();
         this.displayName = profile.getDisplayName();
-        this.accountId = profile.getAccountId();
+        this.accountId = profile.getAccount().getId();
         this.active = profile.isActive();
     }
 
