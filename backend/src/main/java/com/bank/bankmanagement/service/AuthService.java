@@ -30,26 +30,6 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
-    public String createAdmin() {
-
-        if (userRepository.existsByUsername("admin")) {
-            return "Admin already exists";
-        }
-
-        String encodedPassword =
-                passwordEncoder.encode("admin123");
-
-        User admin = new User(
-                "admin",
-                encodedPassword,
-                "ADMIN"
-        );
-
-        userRepository.save(admin);
-
-        return "Admin created successfully";
-    }
-
     @Transactional
     public String register(AuthRequest request) {
 

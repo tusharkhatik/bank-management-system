@@ -26,17 +26,6 @@ public class AuthController {
         this.userRepository = userRepository;
     }
 
-    @PostMapping("/create-admin")
-    public ResponseEntity<?> createAdmin() {
-
-        return ResponseEntity.ok(
-                Map.of(
-                        "message",
-                        authService.createAdmin()
-                )
-        );
-    }
-
     @PostMapping("/register")
     public ResponseEntity<?> register(
             @RequestBody AuthRequest request
