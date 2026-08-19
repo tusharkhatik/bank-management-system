@@ -6,6 +6,8 @@ import com.bank.bankmanagement.model.Customer;
 import com.bank.bankmanagement.repository.AccountRepository;
 import com.bank.bankmanagement.repository.CustomerRepository;
 import com.bank.bankmanagement.repository.TransactionRepository;
+import com.bank.bankmanagement.repository.UserRepository;
+import com.bank.bankmanagement.model.User;
 import com.bank.bankmanagement.service.AccountService;
 
 import org.junit.jupiter.api.Test;
@@ -13,8 +15,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -35,16 +41,40 @@ public class AccountServiceIntegrationTest {
     @Autowired
     TransactionRepository transactionRepository;
 
+    @Autowired
+    UserRepository userRepository;
+
     @Test
     public void transfer_integration() {
 
-        // Create customer
+        // Create authenticated user
+        User user = new User(
+                "testuser",
+                "encoded-password",
+                "USER"
+        );
+
+        user = userRepository.save(user);
+
+        // Create customer linked to the user
         Customer customer = new Customer();
         customer.setName("Test Customer");
         customer.setEmail("test@example.com");
         customer.setPhone("9999999999");
+        customer.setUser(user);
 
         customer = customerRepository.save(customer);
+
+        // Simulate authenticated USER request
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        "testuser",
+                        null,
+                        List.of(
+                                new SimpleGrantedAuthority("ROLE_USER")
+                        )
+                )
+        );
 
         // Create accounts for the customer
         Account a1 = new Account(
@@ -95,5 +125,10 @@ public class AccountServiceIntegrationTest {
         assertFalse(
                 transactionRepository.findAll().isEmpty()
         );
-    }   
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    public void clearAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
 }

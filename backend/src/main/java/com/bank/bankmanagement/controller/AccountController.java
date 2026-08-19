@@ -2,10 +2,13 @@ package com.bank.bankmanagement.controller;
 
 import com.bank.bankmanagement.dto.AccountRequest;
 import com.bank.bankmanagement.dto.AccountResponse;
+import com.bank.bankmanagement.dto.AccountUpdateRequest;
 import com.bank.bankmanagement.dto.TransferRequest;
 import com.bank.bankmanagement.service.AccountService;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -26,6 +29,7 @@ public class AccountController {
     // =========================================================
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public AccountResponse createAccount(
             @RequestBody AccountRequest request) {
 
@@ -37,6 +41,7 @@ public class AccountController {
     // =========================================================
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public List<AccountResponse> getAllAccounts() {
 
         return accountService.getAllAccounts();
@@ -47,6 +52,7 @@ public class AccountController {
     // =========================================================
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<AccountResponse> getAccountById(
             @PathVariable Long id) {
 
@@ -61,6 +67,7 @@ public class AccountController {
     // =========================================================
 
     @PostMapping("/{id}/deposit")
+    @PreAuthorize("isAuthenticated()")
     public AccountResponse deposit(
             @PathVariable Long id,
             @RequestParam BigDecimal amount) {
@@ -73,6 +80,7 @@ public class AccountController {
     // =========================================================
 
     @PostMapping("/{id}/withdraw")
+    @PreAuthorize("isAuthenticated()")
     public AccountResponse withdraw(
             @PathVariable Long id,
             @RequestParam BigDecimal amount) {
@@ -85,6 +93,7 @@ public class AccountController {
     // =========================================================
 
     @PostMapping("/transfer")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<String> transfer(
             @RequestBody TransferRequest request) {
 
@@ -98,11 +107,12 @@ public class AccountController {
     // =========================================================
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public AccountResponse updateAccount(
             @PathVariable Long id,
-            @RequestBody com.bank.bankmanagement.model.Account account) {
+            @RequestBody AccountUpdateRequest request) {
 
-        return accountService.updateAccount(id, account);
+        return accountService.updateAccount(id, request);
     }
 
     // =========================================================
@@ -110,6 +120,7 @@ public class AccountController {
     // =========================================================
 
     @PatchMapping("/{id}/block")
+    @PreAuthorize("hasRole('ADMIN')")
     public AccountResponse blockAccount(
             @PathVariable Long id) {
 
@@ -121,6 +132,7 @@ public class AccountController {
     // =========================================================
 
     @PatchMapping("/{id}/unblock")
+    @PreAuthorize("hasRole('ADMIN')")
     public AccountResponse unblockAccount(
             @PathVariable Long id) {
 
@@ -132,6 +144,7 @@ public class AccountController {
     // =========================================================
 
     @PatchMapping("/{id}/close")
+    @PreAuthorize("hasRole('ADMIN')")
     public AccountResponse closeAccount(
             @PathVariable Long id) {
 
@@ -143,6 +156,7 @@ public class AccountController {
     // =========================================================
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteAccount(
             @PathVariable Long id) {
 

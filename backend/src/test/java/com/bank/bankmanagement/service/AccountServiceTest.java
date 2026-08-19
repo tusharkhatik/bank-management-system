@@ -3,6 +3,7 @@ package com.bank.bankmanagement.service;
 import com.bank.bankmanagement.dto.AccountResponse;
 import com.bank.bankmanagement.dto.TransferRequest;
 import com.bank.bankmanagement.exception.InsufficientFundsException;
+import com.bank.bankmanagement.exception.NotFoundException;
 import com.bank.bankmanagement.model.Account;
 import com.bank.bankmanagement.model.Customer;
 import com.bank.bankmanagement.model.Transaction;
@@ -15,8 +16,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -29,6 +34,23 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class AccountServiceTest {
+
+    @org.junit.jupiter.api.BeforeEach
+    public void setUpAuthentication() {
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        "testuser",
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                )
+        );
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    public void clearAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Mock
     AccountRepository accountRepository;
@@ -62,8 +84,10 @@ public class AccountServiceTest {
                         customer
                 );
 
-        when(accountRepository.findByIdWithCustomer(1L))
-                .thenReturn(Optional.of(account));
+        when(accountRepository.findByIdAndOwnerUsername(
+                1L,
+                "testuser"
+        )).thenReturn(Optional.of(account));
 
         when(accountRepository.save(any(Account.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -114,8 +138,10 @@ public class AccountServiceTest {
                         customer
                 );
 
-        when(accountRepository.findByIdWithCustomer(1L))
-                .thenReturn(Optional.of(account));
+        when(accountRepository.findByIdAndOwnerUsername(
+                1L,
+                "testuser"
+        )).thenReturn(Optional.of(account));
 
         InsufficientFundsException ex =
                 assertThrows(
@@ -158,8 +184,10 @@ public class AccountServiceTest {
                         customer
                 );
 
-        when(accountRepository.findByIdWithCustomer(1L))
-                .thenReturn(Optional.of(from));
+        when(accountRepository.findByIdAndOwnerUsername(
+                1L,
+                "testuser"
+        )).thenReturn(Optional.of(from));
 
         when(accountRepository.findByIdWithCustomer(2L))
                 .thenReturn(Optional.of(to));
@@ -191,4 +219,29 @@ public class AccountServiceTest {
         verify(transactionRepository, times(1))
                 .save(any(Transaction.class));
     }
+
+    // =========================================================
+    // USER CANNOT ACCESS ANOTHER USER'S ACCOUNT
+    // =========================================================
+
+    @Test
+    public void user_cannot_access_another_users_account() {
+
+        when(accountRepository.findByIdAndOwnerUsername(
+                99L,
+                "testuser"
+        )).thenReturn(Optional.empty());
+
+        NotFoundException ex =
+                assertThrows(
+                        NotFoundException.class,
+                        () -> accountService.getAccountById(99L)
+                );
+
+        assertEquals(
+                "Account not found",
+                ex.getMessage()
+        );
+    }
+
 }

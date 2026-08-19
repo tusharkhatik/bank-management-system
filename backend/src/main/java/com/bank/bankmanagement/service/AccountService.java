@@ -2,6 +2,7 @@ package com.bank.bankmanagement.service;
 
 import com.bank.bankmanagement.dto.AccountRequest;
 import com.bank.bankmanagement.dto.AccountResponse;
+import com.bank.bankmanagement.dto.AccountUpdateRequest;
 import com.bank.bankmanagement.dto.TransferRequest;
 import com.bank.bankmanagement.exception.BadRequestException;
 import com.bank.bankmanagement.exception.InsufficientFundsException;
@@ -15,6 +16,8 @@ import com.bank.bankmanagement.repository.AccountRepository;
 import com.bank.bankmanagement.repository.CustomerRepository;
 import com.bank.bankmanagement.repository.TransactionRepository;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,9 +50,7 @@ public class AccountService {
 
         validateAmount(amount, "Deposit");
 
-        Account account = accountRepository.findByIdWithCustomer(id)
-                .orElseThrow(() ->
-                        new NotFoundException("Account not found"));
+        Account account = findAccountForCurrentUser(id);
 
         validateAccountActive(account);
 
@@ -80,9 +81,7 @@ public class AccountService {
 
         validateAmount(amount, "Withdrawal");
 
-        Account account = accountRepository.findByIdWithCustomer(id)
-                .orElseThrow(() ->
-                        new NotFoundException("Account not found"));
+        Account account = findAccountForCurrentUser(id);
 
         validateAccountActive(account);
 
@@ -144,14 +143,9 @@ public class AccountService {
         }
 
         Account fromAccount =
-                accountRepository
-                        .findByIdWithCustomer(
-                                request.getFromAccountId()
-                        )
-                        .orElseThrow(() ->
-                                new NotFoundException(
-                                        "Sender account not found"
-                                ));
+                findAccountForCurrentUser(
+                        request.getFromAccountId()
+                );
 
         Account toAccount =
                 accountRepository
@@ -275,12 +269,7 @@ public class AccountService {
     @Transactional(readOnly = true)
     public AccountResponse getAccountById(Long id) {
 
-        Account account =
-                accountRepository.findByIdWithCustomer(id)
-                        .orElseThrow(() ->
-                                new NotFoundException(
-                                        "Account not found"
-                                ));
+        Account account = findAccountForCurrentUser(id);
 
         return toAccountResponse(account);
     }
@@ -292,11 +281,11 @@ public class AccountService {
     @Transactional
     public AccountResponse updateAccount(
             Long id,
-            Account accountDetails) {
+            AccountUpdateRequest request) {
 
-        if (accountDetails == null) {
+        if (request == null) {
             throw new BadRequestException(
-                    "Account details are required"
+                    "Account update request is required"
             );
         }
 
@@ -307,50 +296,24 @@ public class AccountService {
                                         "Account not found"
                                 ));
 
-        if (accountDetails.getAccountNumber() != null &&
-                !accountDetails.getAccountNumber()
-                        .trim()
-                        .isEmpty()) {
+        if (request.getAccountNumber() != null) {
 
-            account.setAccountNumber(
-                    accountDetails
-                            .getAccountNumber()
-                            .trim()
-            );
-        }
+            String accountNumber =
+                    request.getAccountNumber().trim();
 
-        if (accountDetails.getBalance() != null) {
-
-            if (accountDetails.getBalance()
-                    .compareTo(BigDecimal.ZERO) < 0) {
-
+            if (accountNumber.isEmpty()) {
                 throw new BadRequestException(
-                        "Balance cannot be negative"
+                        "Account number cannot be empty"
                 );
             }
 
-            account.setBalance(
-                    accountDetails.getBalance()
-            );
+            account.setAccountNumber(accountNumber);
         }
 
-        if (accountDetails.getCustomer() != null &&
-                accountDetails.getCustomer().getId() != null) {
-
-            Long customerId =
-                    accountDetails
-                            .getCustomer()
-                            .getId();
-
-            Customer customer =
-                    customerRepository
-                            .findById(customerId)
-                            .orElseThrow(() ->
-                                    new NotFoundException(
-                                            "Customer not found"
-                                    ));
-
-            account.setCustomer(customer);
+        if (request.getAccountType() != null) {
+            account.setAccountType(
+                    request.getAccountType()
+            );
         }
 
         Account savedAccount =
@@ -427,6 +390,50 @@ public class AccountService {
         return toAccountResponse(
                 accountRepository.save(account)
         );
+    }
+
+    private Account findAccountForCurrentUser(Long id) {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null ||
+                !authentication.isAuthenticated()) {
+
+            throw new BadRequestException(
+                    "Authentication is required"
+            );
+        }
+
+        String username =
+                authentication.getName();
+
+        boolean isAdmin =
+                authentication.getAuthorities()
+                        .stream()
+                        .anyMatch(authority ->
+                                "ROLE_ADMIN".equals(
+                                        authority.getAuthority()
+                                ));
+
+        if (isAdmin) {
+
+            return accountRepository
+                    .findByIdWithCustomer(id)
+                    .orElseThrow(() ->
+                            new NotFoundException(
+                                    "Account not found"
+                            ));
+        }
+
+        return accountRepository
+                .findByIdAndOwnerUsername(id, username)
+                .orElseThrow(() ->
+                        new NotFoundException(
+                                "Account not found"
+                        ));
     }
 
     private void validateAccountActive(Account account) {
