@@ -233,11 +233,17 @@ public class SecurityConfig {
                 new CorsConfiguration();
 
         /*
-         * React/Vite GitHub Codespaces frontend
+         * Allow all origins for development
+         * For production, specify exact origins only
          */
         configuration.setAllowedOrigins(
             List.of(
-                "https://silver-waffle-4j65r775v6ggf95-5173.app.github.dev"
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:3000",
+                "http://192.168.0.116:5173",
+                "http://192.168.0.116:3000"
             )
         );
 
@@ -260,11 +266,7 @@ public class SecurityConfig {
          */
         configuration.setAllowedHeaders(
             List.of(
-                "Authorization",
-                "Content-Type",
-                "Accept",
-                "Origin",
-                "X-Requested-With"
+                "*"
             )
         );
 
