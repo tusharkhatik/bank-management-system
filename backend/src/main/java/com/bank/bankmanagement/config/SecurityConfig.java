@@ -170,40 +170,41 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // ---------------------------------------------------------
-        // Allowed frontend origins
-        // ---------------------------------------------------------
-     configuration.setAllowedOrigins(
+      // ---------------------------------------------------------
+// Allowed frontend origins
+// ---------------------------------------------------------
+configuration.setAllowedOrigins(
     List.of(
         "http://localhost:5173",
+        "http://localhost:3000",
         "http://127.0.0.1:5173",
-        "http://192.168.0.109:5173"
+        "http://127.0.0.1:3000",
+        "http://192.168.0.109:5173",
+        "http://192.168.0.109:3000",
+        "http://192.168.0.116:5173",
+        "http://192.168.0.116:3000"
     )
 );
-        // ---------------------------------------------------------
-        // Allowed HTTP methods
-        // ---------------------------------------------------------
-        configuration.setAllowedMethods(
-            List.of(
-                "GET",
-                "POST",
-                "PUT",
-                "DELETE",
-                "PATCH",
-                "OPTIONS"
-            )
-        );
 
+// ---------------------------------------------------------
+// Allowed HTTP methods
+// ---------------------------------------------------------
+configuration.setAllowedMethods(
+    List.of(
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH",
+        "OPTIONS"
+    )
+);
         // ---------------------------------------------------------
         // Allowed request headers
         // ---------------------------------------------------------
         configuration.setAllowedHeaders(
             List.of(
-                "Authorization",
-                "Content-Type",
-                "Accept",
-                "Origin",
-                "X-Requested-With"
+                "*"
             )
         );
 
