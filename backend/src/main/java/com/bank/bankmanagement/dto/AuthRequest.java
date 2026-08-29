@@ -1,17 +1,28 @@
-
 package com.bank.bankmanagement.dto;
 
 import jakarta.validation.constraints.*;
 
 public class AuthRequest {
 
+    // =========================================================
+    // USERNAME
+    // =========================================================
+
     @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50, message = "Username must be 3-50 characters")
+    @Size(
+        min = 3,
+        max = 50,
+        message = "Username must be 3-50 characters"
+    )
     @Pattern(
         regexp = "^[a-zA-Z0-9_.-]+$",
         message = "Username can only contain letters, numbers, dots, hyphens, and underscores"
     )
     private String username;
+
+    // =========================================================
+    // PASSWORD
+    // =========================================================
 
     @NotBlank(message = "Password is required")
     @Size(
@@ -21,20 +32,42 @@ public class AuthRequest {
     )
     private String password;
 
-    @NotBlank(message = "Name is required")
-    @Size(min = 2, max = 100, message = "Name must be 2-100 characters")
+    // =========================================================
+    // REGISTRATION FIELDS
+    // =========================================================
+
+    @Size(
+        min = 2,
+        max = 100,
+        message = "Name must be 2-100 characters"
+    )
     private String name;
 
-    @NotBlank(message = "Email is required")
     @Email(message = "Invalid email address")
     private String email;
 
-    @NotBlank(message = "Phone is required")
     @Pattern(
         regexp = "^[0-9]{10}$",
         message = "Phone must be 10 digits"
     )
     private String phone;
+
+    // =========================================================
+    // LOGIN ROLE
+    // =========================================================
+
+    private String role;
+
+    // =========================================================
+    // CONSTRUCTORS
+    // =========================================================
+
+    public AuthRequest() {
+    }
+
+    // =========================================================
+    // GETTERS / SETTERS
+    // =========================================================
 
     public String getUsername() {
         return username;
@@ -75,5 +108,12 @@ public class AuthRequest {
     public void setPhone(String phone) {
         this.phone = phone;
     }
-}
 
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+}

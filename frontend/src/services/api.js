@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  "https://silver-waffle-4j65r775v6ggf95-8080.app.github.dev/api";
+ "http://localhost:8080/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,

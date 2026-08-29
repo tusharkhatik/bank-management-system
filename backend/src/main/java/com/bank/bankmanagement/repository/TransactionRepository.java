@@ -12,6 +12,10 @@ import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
+    // =========================================================
+    // ADMIN - ALL TRANSACTIONS
+    // =========================================================
+
     @Query("""
             SELECT DISTINCT t
             FROM Transaction t
@@ -20,6 +24,34 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             ORDER BY t.timestamp DESC
             """)
     List<Transaction> findAllWithAccounts();
+
+
+    // =========================================================
+    // USER - OWN TRANSACTIONS
+    //
+    // A transaction belongs to the user when either:
+    // fromAccount.customer.user.username = username
+    // OR
+    // toAccount.customer.user.username = username
+    // =========================================================
+
+    @Query("""
+            SELECT DISTINCT t
+            FROM Transaction t
+            LEFT JOIN FETCH t.fromAccount fa
+            LEFT JOIN FETCH t.toAccount ta
+            WHERE fa.customer.user.username = :username
+               OR ta.customer.user.username = :username
+            ORDER BY t.timestamp DESC
+            """)
+    List<Transaction> findByOwnerUsernameWithAccounts(
+            @Param("username") String username
+    );
+
+
+    // =========================================================
+    // GET TRANSACTION BY ID
+    // =========================================================
 
     @Query("""
             SELECT DISTINCT t
@@ -31,6 +63,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     Optional<Transaction> findByIdWithAccounts(
             @Param("id") Long id
     );
+
+
+    // =========================================================
+    // ACCOUNT TRANSACTIONS
+    // =========================================================
 
     @Query("""
             SELECT DISTINCT t
@@ -45,6 +82,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("accountId") Long accountId
     );
 
+
+    // =========================================================
+    // TRANSACTIONS BY TYPE
+    // =========================================================
+
     @Query("""
             SELECT DISTINCT t
             FROM Transaction t
@@ -56,6 +98,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     List<Transaction> findByTypeWithAccounts(
             @Param("type") String type
     );
+
+
+    // =========================================================
+    // ACCOUNT + TYPE
+    // =========================================================
 
     @Query("""
             SELECT DISTINCT t
@@ -72,17 +119,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("type") String type
     );
 
-    List<Transaction> findByFromAccountIdOrToAccountId(
-            Long fromAccountId,
-            Long toAccountId
-    );
 
-    /*
-     * Pagination queries.
-     *
-     * We intentionally do NOT use JOIN FETCH here because
-     * Spring Data needs a count query for Page<T>.
-     */
+    // =========================================================
+    // PAGINATION - ADMIN
+    // =========================================================
 
     @Query(
             value = """
@@ -98,6 +138,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                     """
     )
     Page<Transaction> findAllPaginated(Pageable pageable);
+
+
+    // =========================================================
+    // PAGINATION - ACCOUNT
+    // =========================================================
 
     @Query(
             value = """
@@ -121,6 +166,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             Pageable pageable
     );
 
+
+    // =========================================================
+    // PAGINATION - TYPE
+    // =========================================================
+
     @Query(
             value = """
                     SELECT t
@@ -140,6 +190,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("type") String type,
             Pageable pageable
     );
+
+
+    // =========================================================
+    // PAGINATION - ACCOUNT + TYPE
+    // =========================================================
 
     @Query(
             value = """
@@ -164,5 +219,15 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("accountId") Long accountId,
             @Param("type") String type,
             Pageable pageable
+    );
+
+
+    // =========================================================
+    // EXISTING
+    // =========================================================
+
+    List<Transaction> findByFromAccountIdOrToAccountId(
+            Long fromAccountId,
+            Long toAccountId
     );
 }

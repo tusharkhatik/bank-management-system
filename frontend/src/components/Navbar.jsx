@@ -37,66 +37,75 @@ function Navbar() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const role = String(user?.role || "CUSTOMER").toUpperCase();
 
-  const navigationItems = [
-    {
-      label: "Dashboard",
-      path: "/dashboard",
-      icon: <DashboardOutlinedIcon fontSize="small" />,
-    },
-    {
-      label: "Customers",
-      path: "/customers",
-      icon: <PeopleIcon fontSize="small" />,
-    },
-    {
-      label: "Accounts",
-      path: "/accounts",
-      icon: <AccountBalanceOutlinedIcon fontSize="small" />,
-    },
-    {
-      label: "Deposit",
-      path: "/deposit",
-      icon: <AddCircleIcon fontSize="small" />,
-    },
-    {
-      label: "Withdraw",
-      path: "/withdraw",
-      icon: <RemoveCircleIcon fontSize="small" />,
-    },
-    {
-      label: "Transfer",
-      path: "/transfer",
-      icon: <SwapHorizIcon fontSize="small" />,
-    },
-    {
-  label: "UPI",
-  path: "/upi",
-  icon: <PaymentsOutlinedIcon fontSize="small" />,
-},
-{
-  label: "Scan & Pay",
-  path: "/scan-pay",
-  icon: <QrCode2OutlinedIcon fontSize="small" />,
-},
-    {
-      label: "Transactions",
-      path: "/transactions",
-      icon: <ReceiptLongOutlinedIcon fontSize="small" />,
-    },
+ const navigationItems = [
+  {
+    label: "Dashboard",
+    path: "/dashboard",
+    icon: <DashboardOutlinedIcon fontSize="small" />,
+  },
 
-    ...(role === "ADMIN"
-      ? [
-          {
-            label: "Admin",
-            path: "/admin",
-            icon: (
-              <AdminPanelSettingsOutlinedIcon fontSize="small" />
-            ),
-          },
-        ]
-      : []),
-  ];
+  ...(role === "ADMIN"
+    ? [
+        {
+          label: "Customers",
+          path: "/customers",
+          icon: <PeopleIcon fontSize="small" />,
+        },
+        {
+          label: "Deposit",
+          path: "/deposit",
+          icon: <AddCircleIcon fontSize="small" />,
+        },
+        {
+          label: "Withdraw",
+          path: "/withdraw",
+          icon: <RemoveCircleIcon fontSize="small" />,
+        },
+      ]
+    : []),
 
+  {
+    label: "Accounts",
+    path: "/accounts",
+    icon: <AccountBalanceOutlinedIcon fontSize="small" />,
+  },
+
+  {
+    label: "Transfer",
+    path: "/transfer",
+    icon: <SwapHorizIcon fontSize="small" />,
+  },
+
+  {
+    label: "UPI",
+    path: "/upi",
+    icon: <PaymentsOutlinedIcon fontSize="small" />,
+  },
+
+  {
+    label: "Scan & Pay",
+    path: "/scan-pay",
+    icon: <QrCode2OutlinedIcon fontSize="small" />,
+  },
+
+  {
+    label: "Transactions",
+    path: "/transactions",
+    icon: <ReceiptLongOutlinedIcon fontSize="small" />,
+  },
+
+  ...(role === "ADMIN"
+    ? [
+        {
+          label: "Admin",
+          path: "/admin",
+          icon: (
+            <AdminPanelSettingsOutlinedIcon fontSize="small" />
+          ),
+        },
+      ]
+    : []),
+];
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");

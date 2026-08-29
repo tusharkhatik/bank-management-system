@@ -23,6 +23,10 @@ import {
   VisibilityOff,
   SecurityRounded,
   CloseRounded,
+  AdminPanelSettingsRounded,
+  PersonOutlineRounded,
+  ArrowBackRounded,
+  EmailRounded,
 } from "@mui/icons-material";
 
 import api from "../services/api";
@@ -35,17 +39,22 @@ export default function Login() {
   const [form, setForm] = useState({
     username: "",
     password: "",
+    role: "USER",
   });
 
   const [showPassword, setShowPassword] = useState(false);
   const [rememberUsername, setRememberUsername] = useState(true);
 
   const [loading, setLoading] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
+
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const [fieldErrors, setFieldErrors] = useState({
     username: "",
     password: "",
+    role: "",
   });
 
   /* =========================================================
@@ -77,10 +86,34 @@ export default function Login() {
     }));
 
     setError("");
+    setSuccess("");
 
     setFieldErrors((previous) => ({
       ...previous,
       [name]: "",
+    }));
+  };
+
+  /* =========================================================
+     SELECT ROLE
+  ========================================================= */
+
+  const handleRoleChange = (role) => {
+    if (loading) {
+      return;
+    }
+
+    setForm((previous) => ({
+      ...previous,
+      role,
+    }));
+
+    setError("");
+    setSuccess("");
+
+    setFieldErrors((previous) => ({
+      ...previous,
+      role: "",
     }));
   };
 
@@ -91,11 +124,17 @@ export default function Login() {
   const validateForm = () => {
     const username = form.username.trim();
     const password = form.password;
+    const role = form.role;
 
     const errors = {
       username: "",
       password: "",
+      role: "",
     };
+
+    if (!role) {
+      errors.role = "Please select account type.";
+    }
 
     if (!username) {
       errors.username = "Username is required.";
@@ -113,7 +152,11 @@ export default function Login() {
 
     setFieldErrors(errors);
 
-    return !errors.username && !errors.password;
+    return (
+      !errors.username &&
+      !errors.password &&
+      !errors.role
+    );
   };
 
   /* =========================================================
@@ -136,6 +179,7 @@ export default function Login() {
     try {
       setLoading(true);
       setError("");
+      setSuccess("");
 
       /*
        * Remove stale authentication data before
@@ -144,9 +188,14 @@ export default function Login() {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
 
+      /*
+       * IMPORTANT:
+       * Send the selected role to the backend.
+       */
       const response = await api.post("/auth/login", {
         username,
         password: form.password,
+        role: form.role,
       });
 
       const data = response?.data;
@@ -189,16 +238,18 @@ export default function Login() {
          USER INFORMATION
       ===================================================== */
 
+      const returnedRole =
+        data?.role ||
+        data?.user?.role ||
+        form.role;
+
       const user = {
         username:
           data?.username ||
           data?.user?.username ||
           username,
 
-        role:
-          data?.role ||
-          data?.user?.role ||
-          "CUSTOMER",
+        role: returnedRole,
       };
 
       localStorage.setItem(
@@ -207,7 +258,7 @@ export default function Login() {
       );
 
       /*
-       * Clear password from React state after successful login.
+       * Clear password from React state.
        */
       setForm((previous) => ({
         ...previous,
@@ -220,6 +271,7 @@ export default function Login() {
       navigate("/dashboard", {
         replace: true,
       });
+
     } catch (err) {
       console.error("Login failed:", err);
 
@@ -237,17 +289,21 @@ export default function Login() {
       if (status === 401) {
         message =
           "Invalid username or password.";
+
       } else if (status === 403) {
         message =
           "Access denied. Your account may not have permission to log in.";
+
       } else if (status === 400) {
         message =
           err?.response?.data?.message ||
           err?.response?.data?.error ||
           "Invalid login request.";
+
       } else if (!err?.response) {
         message =
           "Unable to connect to the banking server. Please check that the backend is running.";
+
       } else {
         const serverMessage =
           err?.response?.data?.message ||
@@ -259,6 +315,7 @@ export default function Login() {
       }
 
       setError(message);
+
     } finally {
       setLoading(false);
     }
@@ -291,11 +348,210 @@ export default function Login() {
   };
 
   /* =========================================================
-     JSX
+     FORGOT PASSWORD
+  ========================================================= */
+
+  const handleForgotPassword = () => {
+    setForgotPassword(true);
+    setError("");
+    setSuccess("");
+  };
+
+  const handleBackToLogin = () => {
+    setForgotPassword(false);
+    setError("");
+    setSuccess("");
+  };
+
+  /* =========================================================
+     FORGOT PASSWORD SCREEN
+  ========================================================= */
+
+  if (forgotPassword) {
+    return (
+      <Box className="login-page">
+
+        <Box className="login-background-shape login-shape-one" />
+
+        <Box className="login-background-shape login-shape-two" />
+
+        <Paper
+          elevation={0}
+          className="login-card"
+          component="main"
+        >
+
+          {/* BRAND */}
+
+          <Box className="login-brand">
+
+            <Box className="login-brand-icon">
+              <AccountBalanceRounded />
+            </Box>
+
+            <Typography className="login-brand-name">
+              SecureBank
+            </Typography>
+
+            <Typography className="login-brand-subtitle">
+              Banking Management System
+            </Typography>
+
+          </Box>
+
+          {/* HEADING */}
+
+          <Box className="login-heading">
+
+            <Typography className="login-title">
+              Forgot password?
+            </Typography>
+
+            <Typography className="login-description">
+              Enter your registered email address and we
+              will help you reset your password.
+            </Typography>
+
+          </Box>
+
+          {/* SUCCESS */}
+
+          {success && (
+            <Alert
+              severity="success"
+              className="login-alert"
+              onClose={() => setSuccess("")}
+              sx={{ mb: 2 }}
+            >
+              {success}
+            </Alert>
+          )}
+
+          {/* ERROR */}
+
+          {error && (
+            <Alert
+              severity="error"
+              className="login-alert"
+              onClose={() => setError("")}
+              sx={{ mb: 2 }}
+            >
+              {error}
+            </Alert>
+          )}
+
+          {/* FORM */}
+
+          <Box
+            component="form"
+            className="login-form"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+
+              setError("");
+              setSuccess(
+                "Password reset functionality will be connected to the backend next."
+              );
+            }}
+          >
+
+            <TextField
+              fullWidth
+              label="Registered email"
+              type="email"
+              placeholder="Enter your registered email"
+              autoComplete="email"
+              disabled={loading}
+              className="login-input"
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailRounded className="login-input-icon" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              disabled={loading}
+              className="login-button"
+              sx={{
+                minHeight: 48,
+                textTransform: "none",
+                fontSize: 15,
+                fontWeight: 700,
+              }}
+            >
+              {loading ? (
+                <>
+                  <CircularProgress
+                    size={20}
+                    thickness={5}
+                    color="inherit"
+                    sx={{ mr: 1 }}
+                  />
+
+                  Sending...
+                </>
+              ) : (
+                "Send reset instructions"
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              fullWidth
+              variant="text"
+              startIcon={<ArrowBackRounded />}
+              onClick={handleBackToLogin}
+              disabled={loading}
+              sx={{
+                minHeight: 44,
+                textTransform: "none",
+                fontWeight: 600,
+              }}
+            >
+              Back to login
+            </Button>
+
+          </Box>
+
+          {/* SECURITY */}
+
+          <Box className="login-security">
+
+            <SecurityRounded />
+
+            <Typography>
+              Your connection and account information are
+              protected.
+            </Typography>
+
+          </Box>
+
+          <Typography className="login-footer">
+            SecureBank Management System
+          </Typography>
+
+        </Paper>
+
+      </Box>
+    );
+  }
+
+  /* =========================================================
+     LOGIN SCREEN
   ========================================================= */
 
   return (
     <Box className="login-page">
+
       {/* Background decoration */}
 
       <Box className="login-background-shape login-shape-one" />
@@ -309,11 +565,13 @@ export default function Login() {
         className="login-card"
         component="main"
       >
+
         {/* =================================================
             BRAND
         ================================================= */}
 
         <Box className="login-brand">
+
           <Box className="login-brand-icon">
             <AccountBalanceRounded />
           </Box>
@@ -325,6 +583,7 @@ export default function Login() {
           <Typography className="login-brand-subtitle">
             Banking Management System
           </Typography>
+
         </Box>
 
         {/* =================================================
@@ -332,6 +591,7 @@ export default function Login() {
         ================================================= */}
 
         <Box className="login-heading">
+
           <Typography className="login-title">
             Welcome back
           </Typography>
@@ -339,6 +599,7 @@ export default function Login() {
           <Typography className="login-description">
             Sign in to securely access your banking dashboard.
           </Typography>
+
         </Box>
 
         {/* =================================================
@@ -350,13 +611,101 @@ export default function Login() {
             severity="error"
             className="login-alert"
             onClose={() => setError("")}
-            sx={{
-              mb: 2,
-            }}
+            sx={{ mb: 2 }}
           >
             {error}
           </Alert>
         )}
+
+        {/* =================================================
+            ACCOUNT TYPE
+        ================================================= */}
+
+        <Box sx={{ mb: 2.5 }}>
+
+          <Typography
+            sx={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "#475569",
+              mb: 1,
+            }}
+          >
+            Sign in as
+          </Typography>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 1.5,
+            }}
+          >
+
+            {/* USER */}
+
+            <Button
+              type="button"
+              disabled={loading}
+              onClick={() =>
+                handleRoleChange("USER")
+              }
+              variant={
+                form.role === "USER"
+                  ? "contained"
+                  : "outlined"
+              }
+              startIcon={<PersonOutlineRounded />}
+              sx={{
+                minHeight: 48,
+                textTransform: "none",
+                fontWeight: 700,
+                borderRadius: 2,
+              }}
+            >
+              User
+            </Button>
+
+            {/* ADMIN */}
+
+            <Button
+              type="button"
+              disabled={loading}
+              onClick={() =>
+                handleRoleChange("ADMIN")
+              }
+              variant={
+                form.role === "ADMIN"
+                  ? "contained"
+                  : "outlined"
+              }
+              startIcon={<AdminPanelSettingsRounded />}
+              sx={{
+                minHeight: 48,
+                textTransform: "none",
+                fontWeight: 700,
+                borderRadius: 2,
+              }}
+            >
+              Admin
+            </Button>
+
+          </Box>
+
+          {fieldErrors.role && (
+            <Typography
+              sx={{
+                color: "error.main",
+                fontSize: 12,
+                mt: 0.75,
+                ml: 1.5,
+              }}
+            >
+              {fieldErrors.role}
+            </Typography>
+          )}
+
+        </Box>
 
         {/* =================================================
             FORM
@@ -368,6 +717,7 @@ export default function Login() {
           className="login-form"
           noValidate
         >
+
           {/* USERNAME */}
 
           <TextField
@@ -385,6 +735,7 @@ export default function Login() {
             helperText={fieldErrors.username}
             slotProps={{
               input: {
+
                 startAdornment: (
                   <InputAdornment position="start">
                     <PersonRounded className="login-input-icon" />
@@ -393,6 +744,7 @@ export default function Login() {
 
                 endAdornment: form.username ? (
                   <InputAdornment position="end">
+
                     <IconButton
                       onClick={clearUsername}
                       disabled={loading}
@@ -402,8 +754,10 @@ export default function Login() {
                     >
                       <CloseRounded fontSize="small" />
                     </IconButton>
+
                   </InputAdornment>
                 ) : null,
+
               },
             }}
           />
@@ -430,6 +784,7 @@ export default function Login() {
             inputRef={passwordRef}
             slotProps={{
               input: {
+
                 startAdornment: (
                   <InputAdornment position="start">
                     <LockRounded className="login-input-icon" />
@@ -438,6 +793,7 @@ export default function Login() {
 
                 endAdornment: (
                   <InputAdornment position="end">
+
                     <IconButton
                       onClick={
                         togglePasswordVisibility
@@ -456,13 +812,15 @@ export default function Login() {
                         <Visibility />
                       )}
                     </IconButton>
+
                   </InputAdornment>
                 ),
+
               },
             }}
           />
 
-          {/* REMEMBER USERNAME */}
+          {/* REMEMBER + FORGOT */}
 
           <Box
             sx={{
@@ -470,8 +828,10 @@ export default function Login() {
               alignItems: "center",
               justifyContent: "space-between",
               mt: -0.5,
+              mb: 1,
             }}
           >
+
             <FormControlLabel
               control={
                 <Checkbox
@@ -496,6 +856,23 @@ export default function Login() {
                 </Typography>
               }
             />
+
+            <Button
+              type="button"
+              variant="text"
+              onClick={handleForgotPassword}
+              disabled={loading}
+              sx={{
+                textTransform: "none",
+                fontSize: 13,
+                fontWeight: 600,
+                minWidth: "auto",
+                px: 0.5,
+              }}
+            >
+              Forgot password?
+            </Button>
+
           </Box>
 
           {/* LOGIN BUTTON */}
@@ -513,15 +890,14 @@ export default function Login() {
               fontWeight: 700,
             }}
           >
+
             {loading ? (
               <>
                 <CircularProgress
                   size={20}
                   thickness={5}
                   color="inherit"
-                  sx={{
-                    mr: 1,
-                  }}
+                  sx={{ mr: 1 }}
                 />
 
                 Signing in...
@@ -529,7 +905,9 @@ export default function Login() {
             ) : (
               "Sign in"
             )}
+
           </Button>
+
         </Box>
 
         {/* =================================================
@@ -537,12 +915,14 @@ export default function Login() {
         ================================================= */}
 
         <Box className="login-security">
+
           <SecurityRounded />
 
           <Typography>
             Your connection and account information are
             protected.
           </Typography>
+
         </Box>
 
         {/* =================================================
@@ -552,7 +932,9 @@ export default function Login() {
         <Typography className="login-footer">
           SecureBank Management System
         </Typography>
+
       </Paper>
+
     </Box>
   );
 }

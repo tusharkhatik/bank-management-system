@@ -1,6 +1,7 @@
 package com.bank.bankmanagement.controller;
 
 import com.bank.bankmanagement.dto.AuthRequest;
+import com.bank.bankmanagement.dto.LoginRequest;
 import com.bank.bankmanagement.model.User;
 import com.bank.bankmanagement.repository.UserRepository;
 import com.bank.bankmanagement.service.AuthService;
@@ -22,8 +23,8 @@ public class AuthController {
 
     public AuthController(
             AuthService authService,
-            UserRepository userRepository
-    ) {
+            UserRepository userRepository) {
+
         this.authService = authService;
         this.userRepository = userRepository;
     }
@@ -50,12 +51,12 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(
-            @RequestBody AuthRequest request) {
+            @Valid @RequestBody LoginRequest request) {
 
         String token = authService.login(request);
 
         User user = userRepository
-                .findByUsername(request.getUsername())
+                .findByUsername(request.getUsername().trim())
                 .orElseThrow();
 
         Map<String, Object> response = new HashMap<>();

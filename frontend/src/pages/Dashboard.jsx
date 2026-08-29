@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react"; 
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -24,7 +24,6 @@ import {
   Typography,
 } from "@mui/material";
 
-import SearchIcon from "@mui/icons-material/Search";
 import PeopleIcon from "@mui/icons-material/People";
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
@@ -82,80 +81,92 @@ function Dashboard() {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [accountDialog, setAccountDialog] = useState(false);
 
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem("user")) || {};
-    } catch {
-      return {};
-    }
-  }, []);
-
+ const user = (() => {
+  try {
+    const storedUser = localStorage.getItem("user");
+    return storedUser ? JSON.parse(storedUser) : {};
+  } catch (error) {
+    console.error("Failed to read user from localStorage:", error);
+    return {};
+  }
+})();
   /* =========================================================
-     LOAD DATA
+     LOAD DASHBOARD DATA
   ========================================================= */
 
-  const loadDashboard = async (refresh = false) => {
-    try {
-      if (refresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      setError("");
-
-      const [
-        customersResponse,
-        accountsResponse,
-        transactionsResponse,
-      ] = await Promise.all([
-        api.get("/customers"),
-        api.get("/accounts"),
-        api.get("/transactions"),
-      ]);
-
-      setCustomers(
-        Array.isArray(customersResponse?.data)
-          ? customersResponse.data
-          : []
-      );
-
-      setAccounts(
-        Array.isArray(accountsResponse?.data)
-          ? accountsResponse.data
-          : []
-      );
-
-      setTransactions(
-        Array.isArray(transactionsResponse?.data)
-          ? transactionsResponse.data
-          : []
-      );
-    } catch (err) {
-      console.error("Dashboard loading failed:", err);
-
-      setError(
-        err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Unable to load dashboard data."
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+ const loadDashboard = async (refresh = false) => {
+  try {
+    if (refresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
     }
-  };
 
-  useEffect(() => {
+    setError("");
+
+    const customersResponse = await api.get("/customers/me");
+    const accountsResponse = await api.get("/accounts");
+    const transactionsResponse = await api.get("/transactions/my");
+
+    const customersData = customersResponse?.data;
+    const accountsData = accountsResponse?.data;
+    const transactionsData = transactionsResponse?.data;
+
+    setCustomers(
+      Array.isArray(customersData)
+        ? customersData
+        : customersData
+        ? [customersData]
+        : []
+    );
+
+    setAccounts(
+      Array.isArray(accountsData)
+        ? accountsData
+        : []
+    );
+
+    setTransactions(
+      Array.isArray(transactionsData)
+        ? transactionsData
+        : []
+    );
+
+  } catch (err) {
+    console.error("Dashboard loading failed:", err);
+
+    console.error("Status:", err?.response?.status);
+    console.error("URL:", err?.config?.url);
+    console.error("Response:", err?.response?.data);
+
+    setError(
+      err?.response?.data?.message ||
+      err?.response?.data?.error ||
+      `Unable to load dashboard data. Status: ${
+        err?.response?.status || "unknown"
+      }`
+    );
+
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
+useEffect(() => {
+  const timer = setTimeout(() => {
     loadDashboard();
-  }, []);
+  }, 0);
 
+  return () => clearTimeout(timer);
+}, []);
   /* =========================================================
      STATISTICS
   ========================================================= */
 
   const totalBalance = useMemo(() => {
     return accounts.reduce(
-      (sum, account) => sum + Number(account?.balance || 0),
+      (sum, account) =>
+        sum + Number(account?.balance || 0),
       0
     );
   }, [accounts]);
@@ -172,7 +183,9 @@ function Dashboard() {
     return transactions
       .filter(
         (transaction) =>
-          String(transaction?.type || "").toUpperCase() === "DEPOSIT"
+          String(
+            transaction?.type || ""
+          ).toUpperCase() === "DEPOSIT"
       )
       .reduce(
         (sum, transaction) =>
@@ -185,7 +198,9 @@ function Dashboard() {
     return transactions
       .filter(
         (transaction) =>
-          String(transaction?.type || "").toUpperCase() === "WITHDRAW"
+          String(
+            transaction?.type || ""
+          ).toUpperCase() === "WITHDRAW"
       )
       .reduce(
         (sum, transaction) =>
@@ -205,22 +220,30 @@ function Dashboard() {
       style: "currency",
       currency: "INR",
       maximumFractionDigits: 2,
-    }).format(Number.isFinite(value) ? value : 0);
+    }).format(
+      Number.isFinite(value) ? value : 0
+    );
   };
 
   const formatCompactCurrency = (amount) => {
     const value = Number(amount || 0);
 
     if (Math.abs(value) >= 10000000) {
-      return `₹${(value / 10000000).toFixed(2)} Cr`;
+      return `₹${(
+        value / 10000000
+      ).toFixed(2)} Cr`;
     }
 
     if (Math.abs(value) >= 100000) {
-      return `₹${(value / 100000).toFixed(2)} L`;
+      return `₹${(
+        value / 100000
+      ).toFixed(2)} L`;
     }
 
     if (Math.abs(value) >= 1000) {
-      return `₹${(value / 1000).toFixed(1)}K`;
+      return `₹${(
+        value / 1000
+      ).toFixed(1)}K`;
     }
 
     return formatCurrency(value);
@@ -251,7 +274,9 @@ function Dashboard() {
       .trim()
       .split(/\s+/)
       .slice(0, 2)
-      .map((part) => part.charAt(0))
+      .map((part) =>
+        part.charAt(0)
+      )
       .join("")
       .toUpperCase();
   };
@@ -263,7 +288,9 @@ function Dashboard() {
   };
 
   const getTransactionColor = (type) => {
-    switch (String(type).toUpperCase()) {
+    switch (
+      String(type).toUpperCase()
+    ) {
       case "DEPOSIT":
         return COLORS.green;
 
@@ -278,48 +305,20 @@ function Dashboard() {
     }
   };
 
-  const getTransactionBackground = (type) => {
-    switch (String(type).toUpperCase()) {
-      case "DEPOSIT":
-        return COLORS.greenBg;
-
-      case "WITHDRAW":
-        return COLORS.redBg;
-
-      case "TRANSFER":
-        return COLORS.blueBg;
-
-      default:
-        return "#f1f5f9";
-    }
-  };
-
-  const getTransactionIcon = (type) => {
-    switch (String(type).toUpperCase()) {
-      case "DEPOSIT":
-        return <AddCircleIcon />;
-
-      case "WITHDRAW":
-        return <RemoveCircleIcon />;
-
-      case "TRANSFER":
-        return <SwapHorizIcon />;
-
-      default:
-        return <ReceiptLongOutlinedIcon />;
-    }
-  };
-
   /* =========================================================
      TRANSACTION FILTER
   ========================================================= */
 
   const filteredTransactions = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query =
+      search.trim().toLowerCase();
 
     return [...transactions]
       .filter((transaction) => {
-        const type = getTransactionType(transaction);
+        const type =
+          getTransactionType(
+            transaction
+          );
 
         if (
           transactionType !== "ALL" &&
@@ -328,20 +327,27 @@ function Dashboard() {
           return false;
         }
 
-        const transactionDate = transaction?.createdAt
-          ? new Date(transaction.createdAt)
-          : null;
+        const transactionDate =
+          transaction?.createdAt
+            ? new Date(
+                transaction.createdAt
+              )
+            : null;
 
         if (
           transactionDate &&
-          !Number.isNaN(transactionDate.getTime())
+          !Number.isNaN(
+            transactionDate.getTime()
+          )
         ) {
           if (dateFrom) {
             const from = new Date(
               `${dateFrom}T00:00:00`
             );
 
-            if (transactionDate < from) {
+            if (
+              transactionDate < from
+            ) {
               return false;
             }
           }
@@ -351,7 +357,9 @@ function Dashboard() {
               `${dateTo}T23:59:59.999`
             );
 
-            if (transactionDate > to) {
+            if (
+              transactionDate > to
+            ) {
               return false;
             }
           }
@@ -370,16 +378,21 @@ function Dashboard() {
           transaction?.account?.customer?.name,
         ];
 
-        return searchableValues.some((value) =>
-          String(value ?? "")
-            .toLowerCase()
-            .includes(query)
+        return searchableValues.some(
+          (value) =>
+            String(value ?? "")
+              .toLowerCase()
+              .includes(query)
         );
       })
       .sort((a, b) => {
         return (
-          new Date(b?.createdAt || 0).getTime() -
-          new Date(a?.createdAt || 0).getTime()
+          new Date(
+            b?.createdAt || 0
+          ).getTime() -
+          new Date(
+            a?.createdAt || 0
+          ).getTime()
         );
       });
   }, [
@@ -393,7 +406,8 @@ function Dashboard() {
   const totalPages = Math.max(
     1,
     Math.ceil(
-      filteredTransactions.length / PAGE_SIZE
+      filteredTransactions.length /
+        PAGE_SIZE
     )
   );
 
@@ -403,14 +417,19 @@ function Dashboard() {
     }
   }, [page, totalPages]);
 
-  const visibleTransactions = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
+  const visibleTransactions =
+    useMemo(() => {
+      const start =
+        (page - 1) * PAGE_SIZE;
 
-    return filteredTransactions.slice(
-      start,
-      start + PAGE_SIZE
-    );
-  }, [filteredTransactions, page]);
+      return filteredTransactions.slice(
+        start,
+        start + PAGE_SIZE
+      );
+    }, [
+      filteredTransactions,
+      page,
+    ]);
 
   const clearFilters = () => {
     setSearch("");
@@ -425,10 +444,15 @@ function Dashboard() {
   ========================================================= */
 
   const escapeCsv = (value) => {
-    return `"${String(value ?? "").replace(/"/g, '""')}"`;
+    return `"${String(
+      value ?? ""
+    ).replace(/"/g, '""')}"`;
   };
 
-  const downloadCsv = (rows, filename) => {
+  const downloadCsv = (
+    rows,
+    filename
+  ) => {
     if (!rows.length) return;
 
     const headers = [
@@ -441,7 +465,9 @@ function Dashboard() {
     ];
 
     const csv = [
-      headers.map(escapeCsv).join(","),
+      headers
+        .map(escapeCsv)
+        .join(","),
       ...rows.map((row) =>
         [
           row.id,
@@ -456,12 +482,18 @@ function Dashboard() {
       ),
     ].join("\n");
 
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;",
-    });
+    const blob = new Blob(
+      [csv],
+      {
+        type: "text/csv;charset=utf-8;",
+      }
+    );
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const url =
+      URL.createObjectURL(blob);
+
+    const link =
+      document.createElement("a");
 
     link.href = url;
     link.download = filename;
@@ -473,20 +505,31 @@ function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
-  const exportTransactions = (rows = transactions) => {
-    const data = rows.map((transaction) => ({
-      id: transaction?.id,
-      type: transaction?.type,
-      amount: transaction?.amount,
-      account:
-        transaction?.accountNumber ||
-        transaction?.account?.accountNumber ||
-        "",
-      createdAt: transaction?.createdAt,
-      description: transaction?.description || "",
-    }));
+  const exportTransactions = (
+    rows = transactions
+  ) => {
+    const data = rows.map(
+      (transaction) => ({
+        id: transaction?.id,
+        type: transaction?.type,
+        amount: transaction?.amount,
+        account:
+          transaction?.accountNumber ||
+          transaction?.account
+            ?.accountNumber ||
+          "",
+        createdAt:
+          transaction?.createdAt,
+        description:
+          transaction?.description ||
+          "",
+      })
+    );
 
-    downloadCsv(data, "bank-transactions.csv");
+    downloadCsv(
+      data,
+      "bank-transactions.csv"
+    );
   };
 
   /* =========================================================
@@ -503,56 +546,74 @@ function Dashboard() {
     setAccountDialog(false);
   };
 
-  const selectedAccountTransactions = useMemo(() => {
-    if (!selectedAccount) return [];
+  const selectedAccountTransactions =
+    useMemo(() => {
+      if (!selectedAccount)
+        return [];
 
-    return transactions
-      .filter((transaction) => {
-        const transactionAccountId =
-          transaction?.accountId ??
-          transaction?.account?.id;
+      return transactions
+        .filter((transaction) => {
+          const transactionAccountId =
+            transaction?.accountId ??
+            transaction?.account?.id;
 
-        return (
-          String(transactionAccountId) ===
-          String(selectedAccount?.id)
+          return (
+            String(
+              transactionAccountId
+            ) ===
+            String(
+              selectedAccount?.id
+            )
+          );
+        })
+        .sort(
+          (a, b) =>
+            new Date(
+              b?.createdAt || 0
+            ) -
+            new Date(
+              a?.createdAt || 0
+            )
         );
-      })
-      .sort(
-        (a, b) =>
-          new Date(b?.createdAt || 0) -
-          new Date(a?.createdAt || 0)
+    }, [
+      transactions,
+      selectedAccount,
+    ]);
+
+  const exportSelectedAccount =
+    () => {
+      if (!selectedAccount)
+        return;
+
+      const data =
+        selectedAccountTransactions.map(
+          (transaction) => ({
+            id: transaction?.id,
+            type: transaction?.type,
+            amount: transaction?.amount,
+            account:
+              selectedAccount?.accountNumber ||
+              "",
+            createdAt:
+              transaction?.createdAt,
+            description:
+              transaction?.description ||
+              "",
+          })
+        );
+
+      downloadCsv(
+        data,
+        `account-${selectedAccount.id}-transactions.csv`
       );
-  }, [transactions, selectedAccount]);
-
-  const exportSelectedAccount = () => {
-    if (!selectedAccount) return;
-
-    const data = selectedAccountTransactions.map(
-      (transaction) => ({
-        id: transaction?.id,
-        type: transaction?.type,
-        amount: transaction?.amount,
-        account:
-          selectedAccount?.accountNumber || "",
-        createdAt: transaction?.createdAt,
-        description: transaction?.description || "",
-      })
-    );
-
-    downloadCsv(
-      data,
-      `account-${selectedAccount.id}-transactions.csv`
-    );
-  };
+    };
 
   /* =========================================================
      LOADING
   ========================================================= */
 
   if (loading) {
-    return (
-      <DashboardLoading />
-    );
+    return <DashboardLoading />;
   }
 
   /* =========================================================
@@ -562,8 +623,10 @@ function Dashboard() {
   return (
     <Box
       sx={{
-        minHeight: "calc(100vh - 64px)",
-        background: COLORS.background,
+        minHeight:
+          "calc(100vh - 64px)",
+        background:
+          COLORS.background,
         px: {
           xs: 1.5,
           sm: 2.5,
@@ -590,7 +653,8 @@ function Dashboard() {
             xs: "flex-start",
             md: "center",
           },
-          justifyContent: "space-between",
+          justifyContent:
+            "space-between",
           gap: 2,
           mb: 3,
         }}
@@ -604,7 +668,8 @@ function Dashboard() {
               },
               fontWeight: 800,
               color: COLORS.navy,
-              letterSpacing: "-0.8px",
+              letterSpacing:
+                "-0.8px",
             }}
           >
             Banking Dashboard
@@ -617,7 +682,9 @@ function Dashboard() {
               color: COLORS.muted,
             }}
           >
-            Monitor accounts, balances and banking activity.
+            Monitor accounts,
+            balances and banking
+            activity.
           </Typography>
         </Box>
 
@@ -633,9 +700,15 @@ function Dashboard() {
         >
           <Button
             variant="outlined"
-            startIcon={<FileDownloadIcon />}
-            onClick={() => exportTransactions()}
-            disabled={!transactions.length}
+            startIcon={
+              <FileDownloadIcon />
+            }
+            onClick={() =>
+              exportTransactions()
+            }
+            disabled={
+              !transactions.length
+            }
             sx={{
               height: 42,
               flex: {
@@ -645,21 +718,25 @@ function Dashboard() {
               borderRadius: 2,
               textTransform: "none",
               fontWeight: 700,
-              borderColor: "#cbd5e1",
+              borderColor:
+                "#cbd5e1",
             }}
           >
             Export
           </Button>
 
           <IconButton
-            onClick={() => loadDashboard(true)}
+            onClick={() =>
+              loadDashboard(true)
+            }
             disabled={refreshing}
             aria-label="Refresh dashboard"
             sx={{
               width: 42,
               height: 42,
               borderRadius: 2,
-              background: COLORS.white,
+              background:
+                COLORS.white,
               border: `1px solid ${COLORS.border}`,
               color: COLORS.muted,
             }}
@@ -669,14 +746,17 @@ function Dashboard() {
                 animation: refreshing
                   ? "dashboardRefresh 1s linear infinite"
                   : "none",
-                "@keyframes dashboardRefresh": {
-                  from: {
-                    transform: "rotate(0deg)",
+                "@keyframes dashboardRefresh":
+                  {
+                    from: {
+                      transform:
+                        "rotate(0deg)",
+                    },
+                    to: {
+                      transform:
+                        "rotate(360deg)",
+                    },
                   },
-                  to: {
-                    transform: "rotate(360deg)",
-                  },
-                },
               }}
             />
           </IconButton>
@@ -705,7 +785,9 @@ function Dashboard() {
             <Button
               color="inherit"
               size="small"
-              onClick={() => loadDashboard()}
+              onClick={() =>
+                loadDashboard()
+              }
             >
               Retry
             </Button>
@@ -723,7 +805,8 @@ function Dashboard() {
           position: "relative",
           overflow: "hidden",
           borderRadius: 3,
-          border: "1px solid #1d4ed8",
+          border:
+            "1px solid #1d4ed8",
           mb: 3,
           color: COLORS.white,
           background:
@@ -788,7 +871,8 @@ function Dashboard() {
               <Box
                 sx={{
                   display: "flex",
-                  alignItems: "center",
+                  alignItems:
+                    "center",
                   gap: 1.5,
                   mb: 2.5,
                 }}
@@ -852,10 +936,13 @@ function Dashboard() {
                     sm: 40,
                   },
                   fontWeight: 800,
-                  letterSpacing: "-1.5px",
+                  letterSpacing:
+                    "-1.5px",
                 }}
               >
-                {formatCurrency(totalBalance)}
+                {formatCurrency(
+                  totalBalance
+                )}
               </Typography>
 
               <Typography
@@ -867,7 +954,10 @@ function Dashboard() {
                 }}
               >
                 Average balance{" "}
-                {formatCurrency(averageBalance)} per account
+                {formatCurrency(
+                  averageBalance
+                )}{" "}
+                per account
               </Typography>
             </Box>
 
@@ -902,7 +992,9 @@ function Dashboard() {
 
               <HeroMetric
                 label="Transactions"
-                value={totalTransactions}
+                value={
+                  totalTransactions
+                }
               />
 
               <HeroMetric
@@ -935,7 +1027,9 @@ function Dashboard() {
           subtitle="Registered customers"
           icon={<PeopleIcon />}
           iconColor={COLORS.primary}
-          iconBackground={COLORS.blueBg}
+          iconBackground={
+            COLORS.blueBg
+          }
         />
 
         <StatCard
@@ -946,16 +1040,24 @@ function Dashboard() {
             <AccountBalanceWalletOutlinedIcon />
           }
           iconColor={COLORS.green}
-          iconBackground={COLORS.greenBg}
+          iconBackground={
+            COLORS.greenBg
+          }
         />
 
         <StatCard
           title="Total Balance"
-          value={formatCompactCurrency(totalBalance)}
+          value={formatCompactCurrency(
+            totalBalance
+          )}
           subtitle="Across all accounts"
-          icon={<AccountBalanceOutlinedIcon />}
+          icon={
+            <AccountBalanceOutlinedIcon />
+          }
           iconColor={COLORS.orange}
-          iconBackground={COLORS.orangeBg}
+          iconBackground={
+            COLORS.orangeBg
+          }
           large
         />
 
@@ -967,7 +1069,9 @@ function Dashboard() {
             <ReceiptLongOutlinedIcon />
           }
           iconColor={COLORS.purple}
-          iconBackground={COLORS.purpleBg}
+          iconBackground={
+            COLORS.purpleBg
+          }
         />
       </Box>
 
@@ -987,18 +1091,26 @@ function Dashboard() {
         <FinancialCard
           title="Total Deposits"
           value={depositTotal}
-          icon={<AddCircleIcon />}
+          icon={
+            <AddCircleIcon />
+          }
           color={COLORS.green}
-          background={COLORS.greenBg}
+          background={
+            COLORS.greenBg
+          }
           description="Money deposited"
         />
 
         <FinancialCard
           title="Total Withdrawals"
           value={withdrawalTotal}
-          icon={<RemoveCircleIcon />}
+          icon={
+            <RemoveCircleIcon />
+          }
           color={COLORS.red}
-          background={COLORS.redBg}
+          background={
+            COLORS.redBg
+          }
           description="Money withdrawn"
         />
       </Box>
@@ -1047,7 +1159,8 @@ function Dashboard() {
               color: COLORS.muted,
             }}
           >
-            Perform common banking operations.
+            Perform common banking
+            operations.
           </Typography>
 
           <Box
@@ -1063,28 +1176,48 @@ function Dashboard() {
             <ActionCard
               title="Deposit Money"
               description="Add funds"
-              icon={<AddCircleIcon />}
+              icon={
+                <AddCircleIcon />
+              }
               color={COLORS.green}
-              background={COLORS.greenBg}
-              onClick={() => navigate("/deposit")}
+              background={
+                COLORS.greenBg
+              }
+              onClick={() =>
+                navigate("/deposit")
+              }
             />
 
             <ActionCard
               title="Withdraw Money"
               description="Withdraw funds"
-              icon={<RemoveCircleIcon />}
+              icon={
+                <RemoveCircleIcon />
+              }
               color={COLORS.red}
-              background={COLORS.redBg}
-              onClick={() => navigate("/withdraw")}
+              background={
+                COLORS.redBg
+              }
+              onClick={() =>
+                navigate("/withdraw")
+              }
             />
 
             <ActionCard
               title="Transfer Funds"
               description="Send money"
-              icon={<SwapHorizIcon />}
-              color={COLORS.primary}
-              background={COLORS.blueBg}
-              onClick={() => navigate("/transfer")}
+              icon={
+                <SwapHorizIcon />
+              }
+              color={
+                COLORS.primary
+              }
+              background={
+                COLORS.blueBg
+              }
+              onClick={() =>
+                navigate("/transfer")
+              }
             />
           </Box>
         </CardContent>
@@ -1116,7 +1249,9 @@ function Dashboard() {
             title="Your Accounts"
             subtitle="Overview of your registered accounts"
             action="View all"
-            onClick={() => navigate("/accounts")}
+            onClick={() =>
+              navigate("/accounts")
+            }
           />
 
           <Divider />
@@ -1127,15 +1262,29 @@ function Dashboard() {
               description="No bank accounts are currently available."
             />
           ) : (
-            accounts.slice(0, 6).map((account, index) => (
-              <AccountRow
-                key={account?.id ?? index}
-                account={account}
-                onDetails={() =>
-                  openAccount(account)
-                }
-              />
-            ))
+            accounts
+              .slice(0, 6)
+              .map(
+                (
+                  account,
+                  index
+                ) => (
+                  <AccountRow
+                    key={
+                      account?.id ??
+                      index
+                    }
+                    account={
+                      account
+                    }
+                    onDetails={() =>
+                      openAccount(
+                        account
+                      )
+                    }
+                  />
+                )
+              )
           )}
         </Card>
 
@@ -1154,7 +1303,9 @@ function Dashboard() {
             subtitle="Latest banking activity"
             action="View all"
             onClick={() =>
-              navigate("/transactions")
+              navigate(
+                "/transactions"
+              )
             }
           />
 
@@ -1168,7 +1319,8 @@ function Dashboard() {
                 xs: 1.5,
                 sm: 2,
               },
-              background: "#fbfdff",
+              background:
+                "#fbfdff",
             }}
           >
             <Box
@@ -1187,43 +1339,55 @@ function Dashboard() {
                 placeholder="Search transactions..."
                 value={search}
                 onChange={(event) => {
-                  setSearch(event.target.value);
+                  setSearch(
+                    event.target.value
+                  );
                   setPage(1);
                 }}
                 sx={{
-                  background: COLORS.white,
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 1.5,
-                  },
+                  background:
+                    COLORS.white,
+                  "& .MuiOutlinedInput-root":
+                    {
+                      borderRadius: 1.5,
+                    },
                 }}
               />
 
               <TextField
                 select
                 size="small"
-                value={transactionType}
+                value={
+                  transactionType
+                }
                 onChange={(event) => {
                   setTransactionType(
-                    event.target.value
+                    event.target
+                      .value
                   );
                   setPage(1);
                 }}
                 sx={{
-                  background: COLORS.white,
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 1.5,
-                  },
+                  background:
+                    COLORS.white,
+                  "& .MuiOutlinedInput-root":
+                    {
+                      borderRadius: 1.5,
+                    },
                 }}
               >
                 <MenuItem value="ALL">
                   All types
                 </MenuItem>
+
                 <MenuItem value="DEPOSIT">
                   Deposit
                 </MenuItem>
+
                 <MenuItem value="WITHDRAW">
                   Withdraw
                 </MenuItem>
+
                 <MenuItem value="TRANSFER">
                   Transfer
                 </MenuItem>
@@ -1246,14 +1410,19 @@ function Dashboard() {
                 type="date"
                 value={dateFrom}
                 onChange={(event) => {
-                  setDateFrom(event.target.value);
+                  setDateFrom(
+                    event.target
+                      .value
+                  );
                   setPage(1);
                 }}
                 sx={{
-                  background: COLORS.white,
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 1.5,
-                  },
+                  background:
+                    COLORS.white,
+                  "& .MuiOutlinedInput-root":
+                    {
+                      borderRadius: 1.5,
+                    },
                 }}
               />
 
@@ -1262,26 +1431,35 @@ function Dashboard() {
                 type="date"
                 value={dateTo}
                 onChange={(event) => {
-                  setDateTo(event.target.value);
+                  setDateTo(
+                    event.target
+                      .value
+                  );
                   setPage(1);
                 }}
                 sx={{
-                  background: COLORS.white,
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 1.5,
-                  },
+                  background:
+                    COLORS.white,
+                  "& .MuiOutlinedInput-root":
+                    {
+                      borderRadius: 1.5,
+                    },
                 }}
               />
 
               {(search ||
-                transactionType !== "ALL" ||
+                transactionType !==
+                  "ALL" ||
                 dateFrom ||
                 dateTo) && (
                 <Button
-                  onClick={clearFilters}
+                  onClick={
+                    clearFilters
+                  }
                   sx={{
                     minHeight: 40,
-                    textTransform: "none",
+                    textTransform:
+                      "none",
                     fontWeight: 700,
                   }}
                 >
@@ -1293,7 +1471,8 @@ function Dashboard() {
 
           <Divider />
 
-          {filteredTransactions.length === 0 ? (
+          {filteredTransactions.length ===
+          0 ? (
             <EmptyState
               title={
                 transactions.length
@@ -1309,13 +1488,18 @@ function Dashboard() {
           ) : (
             <>
               {visibleTransactions.map(
-                (transaction, index) => (
+                (
+                  transaction,
+                  index
+                ) => (
                   <TransactionRow
                     key={
                       transaction?.id ??
                       `transaction-${index}`
                     }
-                    transaction={transaction}
+                    transaction={
+                      transaction
+                    }
                     onView={() =>
                       navigate(
                         `/transactions/${transaction?.id}`
@@ -1328,16 +1512,25 @@ function Dashboard() {
               {totalPages > 1 && (
                 <Box
                   sx={{
-                    display: "flex",
-                    justifyContent: "center",
+                    display:
+                      "flex",
+                    justifyContent:
+                      "center",
                     p: 2,
                   }}
                 >
                   <Pagination
-                    count={totalPages}
+                    count={
+                      totalPages
+                    }
                     page={page}
-                    onChange={(_, value) =>
-                      setPage(value)
+                    onChange={(
+                      _,
+                      value
+                    ) =>
+                      setPage(
+                        value
+                      )
                     }
                     size="small"
                     color="primary"
@@ -1355,13 +1548,25 @@ function Dashboard() {
 
       <AccountDetailsDialog
         open={accountDialog}
-        account={selectedAccount}
-        transactions={selectedAccountTransactions}
-        onClose={closeAccount}
-        onExport={exportSelectedAccount}
-        formatCurrency={formatCurrency}
+        account={
+          selectedAccount
+        }
+        transactions={
+          selectedAccountTransactions
+        }
+        onClose={
+          closeAccount
+        }
+        onExport={
+          exportSelectedAccount
+        }
+        formatCurrency={
+          formatCurrency
+        }
         formatDate={formatDate}
-        getTransactionColor={getTransactionColor}
+        getTransactionColor={
+          getTransactionColor
+        }
       />
     </Box>
   );
@@ -1371,20 +1576,26 @@ function Dashboard() {
    HERO METRIC
 ========================================================= */
 
-function HeroMetric({ label, value, chip }) {
+function HeroMetric({
+  label,
+  value,
+  chip,
+}) {
   return (
     <Box
       sx={{
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
+        justifyContent:
+          "space-between",
         py: 0.8,
       }}
     >
       <Typography
         sx={{
           fontSize: 13,
-          color: "rgba(255,255,255,0.72)",
+          color:
+            "rgba(255,255,255,0.72)",
         }}
       >
         {label}
@@ -1440,7 +1651,8 @@ function StatCard({
         transition:
           "transform .2s ease, box-shadow .2s ease",
         "&:hover": {
-          transform: "translateY(-2px)",
+          transform:
+            "translateY(-2px)",
           boxShadow:
             "0 10px 30px rgba(15,23,42,0.07)",
         },
@@ -1457,8 +1669,10 @@ function StatCard({
         <Box
           sx={{
             display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
+            alignItems:
+              "flex-start",
+            justifyContent:
+              "space-between",
             gap: 2,
           }}
         >
@@ -1480,12 +1694,16 @@ function StatCard({
             <Typography
               sx={{
                 mt: 1,
-                fontSize: large ? 23 : 29,
+                fontSize:
+                  large ? 23 : 29,
                 lineHeight: 1.1,
                 fontWeight: 800,
-                color: COLORS.navy,
-                letterSpacing: "-0.6px",
-                overflowWrap: "anywhere",
+                color:
+                  COLORS.navy,
+                letterSpacing:
+                  "-0.6px",
+                overflowWrap:
+                  "anywhere",
               }}
             >
               {value}
@@ -1495,7 +1713,8 @@ function StatCard({
               sx={{
                 mt: 0.8,
                 fontSize: 11,
-                color: COLORS.lightMuted,
+                color:
+                  COLORS.lightMuted,
               }}
             >
               {subtitle}
@@ -1509,10 +1728,13 @@ function StatCard({
               flexShrink: 0,
               borderRadius: 2,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
               color: iconColor,
-              background: iconBackground,
+              background:
+                iconBackground,
             }}
           >
             {icon}
@@ -1554,8 +1776,10 @@ function FinancialCard({
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            alignItems:
+              "center",
+            justifyContent:
+              "space-between",
             gap: 2,
           }}
         >
@@ -1578,18 +1802,28 @@ function FinancialCard({
                 color,
               }}
             >
-              {new Intl.NumberFormat("en-IN", {
-                style: "currency",
-                currency: "INR",
-                maximumFractionDigits: 2,
-              }).format(Number(value || 0))}
+              {new Intl.NumberFormat(
+                "en-IN",
+                {
+                  style:
+                    "currency",
+                  currency:
+                    "INR",
+                  maximumFractionDigits: 2,
+                }
+              ).format(
+                Number(
+                  value || 0
+                )
+              )}
             </Typography>
 
             <Typography
               sx={{
                 mt: 0.3,
                 fontSize: 11,
-                color: COLORS.lightMuted,
+                color:
+                  COLORS.lightMuted,
               }}
             >
               {description}
@@ -1602,8 +1836,10 @@ function FinancialCard({
               height: 44,
               borderRadius: 2,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
               color,
               background,
             }}
@@ -1635,12 +1871,15 @@ function ActionCard({
       sx={{
         minHeight: 76,
         px: 1.5,
-        justifyContent: "flex-start",
-        textTransform: "none",
+        justifyContent:
+          "flex-start",
+        textTransform:
+          "none",
         borderRadius: 2,
         border: `1px solid ${COLORS.border}`,
         color: COLORS.text,
-        background: COLORS.white,
+        background:
+          COLORS.white,
         textAlign: "left",
         "&:hover": {
           background,
@@ -1656,8 +1895,10 @@ function ActionCard({
           borderRadius: 2,
           mr: 1.5,
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          alignItems:
+            "center",
+          justifyContent:
+            "center",
           color,
           background,
         }}
@@ -1684,7 +1925,8 @@ function ActionCard({
           sx={{
             mt: 0.2,
             fontSize: 11,
-            color: COLORS.muted,
+            color:
+              COLORS.muted,
           }}
         >
           {description}
@@ -1694,7 +1936,8 @@ function ActionCard({
       <ArrowForwardIcon
         sx={{
           fontSize: 18,
-          color: COLORS.lightMuted,
+          color:
+            COLORS.lightMuted,
         }}
       />
     </Button>
@@ -1705,8 +1948,13 @@ function ActionCard({
    ACCOUNT ROW
 ========================================================= */
 
-function AccountRow({ account, onDetails }) {
-  const balance = Number(account?.balance || 0);
+function AccountRow({
+  account,
+  onDetails,
+}) {
+  const balance = Number(
+    account?.balance || 0
+  );
 
   return (
     <Box
@@ -1716,10 +1964,13 @@ function AccountRow({ account, onDetails }) {
           sm: 2.5,
         },
         py: 2,
-        borderBottom: `1px solid #f1f5f9`,
-        transition: "background .2s ease",
+        borderBottom:
+          "1px solid #f1f5f9",
+        transition:
+          "background .2s ease",
         "&:hover": {
-          background: "#fafcff",
+          background:
+            "#fafcff",
         },
       }}
     >
@@ -1734,14 +1985,16 @@ function AccountRow({ account, onDetails }) {
             xs: "flex-start",
             sm: "center",
           },
-          justifyContent: "space-between",
+          justifyContent:
+            "space-between",
           gap: 2,
         }}
       >
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
+            alignItems:
+              "center",
             gap: 1.5,
             minWidth: 0,
           }}
@@ -1753,10 +2006,14 @@ function AccountRow({ account, onDetails }) {
               flexShrink: 0,
               borderRadius: 2,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: COLORS.blueBg,
-              color: COLORS.primary,
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              background:
+                COLORS.blueBg,
+              color:
+                COLORS.primary,
             }}
           >
             <AccountBalanceOutlinedIcon />
@@ -1771,10 +2028,14 @@ function AccountRow({ account, onDetails }) {
               sx={{
                 fontSize: 14,
                 fontWeight: 800,
-                color: COLORS.navy,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                color:
+                  COLORS.navy,
+                overflow:
+                  "hidden",
+                textOverflow:
+                  "ellipsis",
+                whiteSpace:
+                  "nowrap",
               }}
             >
               {account?.accountNumber ||
@@ -1785,10 +2046,12 @@ function AccountRow({ account, onDetails }) {
               sx={{
                 mt: 0.25,
                 fontSize: 12,
-                color: COLORS.muted,
+                color:
+                  COLORS.muted,
               }}
             >
-              {account?.customer?.name ||
+              {account?.customer
+                ?.name ||
                 "Customer unavailable"}
             </Typography>
 
@@ -1796,10 +2059,13 @@ function AccountRow({ account, onDetails }) {
               sx={{
                 mt: 0.2,
                 fontSize: 10,
-                color: COLORS.lightMuted,
+                color:
+                  COLORS.lightMuted,
               }}
             >
-              Account ID: {account?.id ?? "N/A"}
+              Account ID:{" "}
+              {account?.id ??
+                "N/A"}
             </Typography>
           </Box>
         </Box>
@@ -1807,7 +2073,8 @@ function AccountRow({ account, onDetails }) {
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
+            alignItems:
+              "center",
             gap: 1,
             width: {
               xs: "100%",
@@ -1831,14 +2098,20 @@ function AccountRow({ account, onDetails }) {
               sx={{
                 fontSize: 15,
                 fontWeight: 800,
-                color: COLORS.navy,
+                color:
+                  COLORS.navy,
               }}
             >
-              {new Intl.NumberFormat("en-IN", {
-                style: "currency",
-                currency: "INR",
-                maximumFractionDigits: 2,
-              }).format(balance)}
+              {new Intl.NumberFormat(
+                "en-IN",
+                {
+                  style:
+                    "currency",
+                  currency:
+                    "INR",
+                  maximumFractionDigits: 2,
+                }
+              ).format(balance)}
             </Typography>
 
             <Chip
@@ -1849,8 +2122,10 @@ function AccountRow({ account, onDetails }) {
                 height: 21,
                 fontSize: 10,
                 fontWeight: 800,
-                color: "#047857",
-                background: COLORS.greenBg,
+                color:
+                  "#047857",
+                background:
+                  COLORS.greenBg,
               }}
             />
           </Box>
@@ -1860,7 +2135,8 @@ function AccountRow({ account, onDetails }) {
             size="small"
             aria-label="Account details"
             sx={{
-              color: COLORS.primary,
+              color:
+                COLORS.primary,
             }}
           >
             <MoreHorizIcon />
@@ -1880,7 +2156,8 @@ function TransactionRow({
   onView,
 }) {
   const type = String(
-    transaction?.type || "TRANSACTION"
+    transaction?.type ||
+      "TRANSACTION"
   ).toUpperCase();
 
   const color =
@@ -1924,21 +2201,25 @@ function TransactionRow({
           sm: 2.5,
         },
         py: 1.8,
-        borderBottom: `1px solid #f1f5f9`,
+        borderBottom:
+          "1px solid #f1f5f9",
       }}
     >
       <Box
         sx={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          alignItems:
+            "center",
+          justifyContent:
+            "space-between",
           gap: 1.5,
         }}
       >
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
+            alignItems:
+              "center",
             gap: 1.2,
             minWidth: 0,
           }}
@@ -1950,8 +2231,10 @@ function TransactionRow({
               flexShrink: 0,
               borderRadius: 2,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
               color,
               background,
             }}
@@ -1968,7 +2251,8 @@ function TransactionRow({
               sx={{
                 fontSize: 13,
                 fontWeight: 800,
-                color: COLORS.navy,
+                color:
+                  COLORS.navy,
               }}
             >
               {type}
@@ -1978,34 +2262,44 @@ function TransactionRow({
               sx={{
                 mt: 0.2,
                 fontSize: 10,
-                color: COLORS.lightMuted,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                color:
+                  COLORS.lightMuted,
+                overflow:
+                  "hidden",
+                textOverflow:
+                  "ellipsis",
+                whiteSpace:
+                  "nowrap",
                 maxWidth: {
                   xs: 120,
                   sm: 180,
                 },
               }}
             >
-              Transaction #{transaction?.id ?? "N/A"}
+              Transaction #
+              {transaction?.id ??
+                "N/A"}
             </Typography>
 
             <Typography
               sx={{
                 mt: 0.1,
                 fontSize: 10,
-                color: COLORS.lightMuted,
+                color:
+                  COLORS.lightMuted,
               }}
             >
               {transaction?.createdAt
                 ? new Date(
                     transaction.createdAt
-                  ).toLocaleDateString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })
+                  ).toLocaleDateString(
+                    "en-IN",
+                    {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    }
+                  )
                 : "Date unavailable"}
             </Typography>
           </Box>
@@ -2022,15 +2316,25 @@ function TransactionRow({
               fontSize: 13,
               fontWeight: 800,
               color,
-              whiteSpace: "nowrap",
+              whiteSpace:
+                "nowrap",
             }}
           >
-            {new Intl.NumberFormat("en-IN", {
-              style: "currency",
-              currency: "INR",
-              maximumFractionDigits: 2,
-            }).format(
-              Number.isFinite(amount) ? amount : 0
+            {new Intl.NumberFormat(
+              "en-IN",
+              {
+                style:
+                  "currency",
+                currency:
+                  "INR",
+                maximumFractionDigits: 2,
+              }
+            ).format(
+              Number.isFinite(
+                amount
+              )
+                ? amount
+                : 0
             )}
           </Typography>
 
@@ -2039,9 +2343,11 @@ function TransactionRow({
             onClick={onView}
             sx={{
               mt: 0.2,
-              minWidth: "auto",
+              minWidth:
+                "auto",
               p: 0,
-              textTransform: "none",
+              textTransform:
+                "none",
               fontSize: 11,
               fontWeight: 700,
             }}
@@ -2081,7 +2387,8 @@ function SectionHeader({
           xs: "flex-start",
           sm: "center",
         },
-        justifyContent: "space-between",
+        justifyContent:
+          "space-between",
         gap: 1,
       }}
     >
@@ -2090,7 +2397,8 @@ function SectionHeader({
           sx={{
             fontSize: 15,
             fontWeight: 800,
-            color: COLORS.navy,
+            color:
+              COLORS.navy,
           }}
         >
           {title}
@@ -2100,7 +2408,8 @@ function SectionHeader({
           sx={{
             mt: 0.3,
             fontSize: 11,
-            color: COLORS.muted,
+            color:
+              COLORS.muted,
           }}
         >
           {subtitle}
@@ -2109,14 +2418,19 @@ function SectionHeader({
 
       <Button
         onClick={onClick}
-        endIcon={<ArrowForwardIcon />}
+        endIcon={
+          <ArrowForwardIcon />
+        }
         sx={{
           p: 0,
-          minWidth: "auto",
-          textTransform: "none",
+          minWidth:
+            "auto",
+          textTransform:
+            "none",
           fontSize: 12,
           fontWeight: 800,
-          color: COLORS.primary,
+          color:
+            COLORS.primary,
         }}
       >
         {action}
@@ -2154,7 +2468,8 @@ function AccountDetailsDialog({
       <DialogTitle
         sx={{
           fontWeight: 800,
-          color: COLORS.navy,
+          color:
+            COLORS.navy,
         }}
       >
         Account Details
@@ -2163,14 +2478,16 @@ function AccountDetailsDialog({
       <DialogContent dividers>
         {!account ? (
           <Typography>
-            Account information unavailable.
+            Account information
+            unavailable.
           </Typography>
         ) : (
           <>
             <Box
               sx={{
                 display: "flex",
-                alignItems: "center",
+                alignItems:
+                  "center",
                 gap: 1.5,
                 mb: 2.5,
               }}
@@ -2179,13 +2496,16 @@ function AccountDetailsDialog({
                 sx={{
                   width: 48,
                   height: 48,
-                  background: COLORS.blueBg,
-                  color: COLORS.primary,
+                  background:
+                    COLORS.blueBg,
+                  color:
+                    COLORS.primary,
                   fontWeight: 800,
                 }}
               >
                 {String(
-                  account?.accountNumber || "A"
+                  account?.accountNumber ||
+                    "A"
                 ).charAt(0)}
               </Avatar>
 
@@ -2203,10 +2523,12 @@ function AccountDetailsDialog({
                 <Typography
                   sx={{
                     fontSize: 12,
-                    color: COLORS.muted,
+                    color:
+                      COLORS.muted,
                   }}
                 >
-                  {account?.customer?.name ||
+                  {account?.customer
+                    ?.name ||
                     "Customer unavailable"}
                 </Typography>
               </Box>
@@ -2216,7 +2538,8 @@ function AccountDetailsDialog({
               sx={{
                 p: 2.5,
                 borderRadius: 2.5,
-                background: COLORS.background,
+                background:
+                  COLORS.background,
                 border: `1px solid ${COLORS.border}`,
                 mb: 2.5,
               }}
@@ -2225,7 +2548,8 @@ function AccountDetailsDialog({
                 sx={{
                   fontSize: 10,
                   fontWeight: 800,
-                  color: COLORS.muted,
+                  color:
+                    COLORS.muted,
                   letterSpacing: 0.8,
                 }}
               >
@@ -2237,7 +2561,8 @@ function AccountDetailsDialog({
                   mt: 0.5,
                   fontSize: 28,
                   fontWeight: 800,
-                  color: COLORS.navy,
+                  color:
+                    COLORS.navy,
                 }}
               >
                 {formatCurrency(
@@ -2249,18 +2574,23 @@ function AccountDetailsDialog({
                 sx={{
                   mt: 0.5,
                   fontSize: 11,
-                  color: COLORS.lightMuted,
+                  color:
+                    COLORS.lightMuted,
                 }}
               >
-                Account ID: {account?.id ?? "N/A"}
+                Account ID:{" "}
+                {account?.id ??
+                  "N/A"}
               </Typography>
             </Box>
 
             <Box
               sx={{
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "space-between",
                 mb: 1.5,
               }}
             >
@@ -2274,7 +2604,9 @@ function AccountDetailsDialog({
               </Typography>
 
               <Chip
-                label={transactions.length}
+                label={
+                  transactions.length
+                }
                 size="small"
                 sx={{
                   height: 22,
@@ -2288,13 +2620,15 @@ function AccountDetailsDialog({
               <Box
                 sx={{
                   py: 4,
-                  textAlign: "center",
+                  textAlign:
+                    "center",
                 }}
               >
                 <ReceiptLongOutlinedIcon
                   sx={{
                     fontSize: 36,
-                    color: "#cbd5e1",
+                    color:
+                      "#cbd5e1",
                   }}
                 />
 
@@ -2302,37 +2636,84 @@ function AccountDetailsDialog({
                   sx={{
                     mt: 1,
                     fontSize: 12,
-                    color: COLORS.muted,
+                    color:
+                      COLORS.muted,
                   }}
                 >
-                  No transactions found.
+                  No transactions
+                  found.
                 </Typography>
               </Box>
             ) : (
               <Stack spacing={0}>
                 {transactions
                   .slice(0, 10)
-                  .map((transaction) => {
-                    const type =
-                      String(
-                        transaction?.type ||
-                          "TRANSACTION"
-                      ).toUpperCase();
+                  .map(
+                    (
+                      transaction
+                    ) => {
+                      const type =
+                        String(
+                          transaction?.type ||
+                            "TRANSACTION"
+                        ).toUpperCase();
 
-                    return (
-                      <Box
-                        key={transaction?.id}
-                        sx={{
-                          py: 1.3,
-                          borderBottom:
-                            `1px solid #f1f5f9`,
-                          display: "flex",
-                          justifyContent:
-                            "space-between",
-                          gap: 2,
-                        }}
-                      >
-                        <Box>
+                      return (
+                        <Box
+                          key={
+                            transaction?.id
+                          }
+                          sx={{
+                            py: 1.3,
+                            borderBottom:
+                              "1px solid #f1f5f9",
+                            display:
+                              "flex",
+                            justifyContent:
+                              "space-between",
+                            gap: 2,
+                          }}
+                        >
+                          <Box>
+                            <Typography
+                              sx={{
+                                fontSize: 12,
+                                fontWeight: 800,
+                                color:
+                                  getTransactionColor(
+                                    type
+                                  ),
+                              }}
+                            >
+                              {type}
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.2,
+                                fontSize: 11,
+                                color:
+                                  COLORS.muted,
+                              }}
+                            >
+                              {transaction?.description ||
+                                `Transaction #${transaction?.id}`}
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.2,
+                                fontSize: 10,
+                                color:
+                                  COLORS.lightMuted,
+                              }}
+                            >
+                              {formatDate(
+                                transaction?.createdAt
+                              )}
+                            </Typography>
+                          </Box>
+
                           <Typography
                             sx={{
                               fontSize: 12,
@@ -2343,51 +2724,14 @@ function AccountDetailsDialog({
                                 ),
                             }}
                           >
-                            {type}
-                          </Typography>
-
-                          <Typography
-                            sx={{
-                              mt: 0.2,
-                              fontSize: 11,
-                              color: COLORS.muted,
-                            }}
-                          >
-                            {transaction?.description ||
-                              `Transaction #${transaction?.id}`}
-                          </Typography>
-
-                          <Typography
-                            sx={{
-                              mt: 0.2,
-                              fontSize: 10,
-                              color:
-                                COLORS.lightMuted,
-                            }}
-                          >
-                            {formatDate(
-                              transaction?.createdAt
+                            {formatCurrency(
+                              transaction?.amount
                             )}
                           </Typography>
                         </Box>
-
-                        <Typography
-                          sx={{
-                            fontSize: 12,
-                            fontWeight: 800,
-                            color:
-                              getTransactionColor(
-                                type
-                              ),
-                          }}
-                        >
-                          {formatCurrency(
-                            transaction?.amount
-                          )}
-                        </Typography>
-                      </Box>
-                    );
-                  })}
+                      );
+                    }
+                  )}
               </Stack>
             )}
           </>
@@ -2402,10 +2746,15 @@ function AccountDetailsDialog({
       >
         <Button
           onClick={onExport}
-          disabled={!transactions.length}
-          startIcon={<FileDownloadIcon />}
+          disabled={
+            !transactions.length
+          }
+          startIcon={
+            <FileDownloadIcon />
+          }
           sx={{
-            textTransform: "none",
+            textTransform:
+              "none",
             fontWeight: 700,
           }}
         >
@@ -2417,7 +2766,8 @@ function AccountDetailsDialog({
           onClick={onClose}
           sx={{
             borderRadius: 2,
-            textTransform: "none",
+            textTransform:
+              "none",
             fontWeight: 700,
           }}
         >
@@ -2456,7 +2806,8 @@ function EmptyState({
           mt: 1,
           fontSize: 14,
           fontWeight: 800,
-          color: COLORS.text,
+          color:
+            COLORS.text,
         }}
       >
         {title}
@@ -2466,7 +2817,8 @@ function EmptyState({
         sx={{
           mt: 0.5,
           fontSize: 12,
-          color: COLORS.muted,
+          color:
+            COLORS.muted,
         }}
       >
         {description}
@@ -2483,8 +2835,10 @@ function DashboardLoading() {
   return (
     <Box
       sx={{
-        minHeight: "calc(100vh - 64px)",
-        background: COLORS.background,
+        minHeight:
+          "calc(100vh - 64px)",
+        background:
+          COLORS.background,
         px: {
           xs: 1.5,
           sm: 2.5,
@@ -2525,13 +2879,15 @@ function DashboardLoading() {
             gap: 2,
           }}
         >
-          {[1, 2, 3, 4].map((item) => (
-            <Skeleton
-              key={item}
-              variant="rounded"
-              height={135}
-            />
-          ))}
+          {[1, 2, 3, 4].map(
+            (item) => (
+              <Skeleton
+                key={item}
+                variant="rounded"
+                height={135}
+              />
+            )
+          )}
         </Box>
 
         <Skeleton
@@ -2565,3 +2921,4 @@ function DashboardLoading() {
 }
 
 export default Dashboard;
+

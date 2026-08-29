@@ -1,3 +1,4 @@
+
 import { useMemo, useState } from "react";
 
 import {
@@ -15,7 +16,6 @@ import {
   Shield,
   TrendingUp,
   VerifiedUser,
-  WarningAmber,
 } from "@mui/icons-material";
 
 import {
@@ -67,6 +67,10 @@ const formatNumber = (value) => {
   );
 };
 
+/* =========================================================
+   EXTRACT BALANCE
+========================================================= */
+
 const getResponseBalance = (data) => {
   if (data === null || data === undefined) {
     return null;
@@ -104,8 +108,25 @@ const getResponseBalance = (data) => {
     : null;
 };
 
+/* =========================================================
+   ERROR MESSAGE
+========================================================= */
+
 const getErrorMessage = (error) => {
+  const status = error?.response?.status;
   const responseData = error?.response?.data;
+
+  if (status === 401) {
+    return "Your session has expired. Please log in again.";
+  }
+
+  if (status === 403) {
+    return "You are not authorized to access this account.";
+  }
+
+  if (status === 404) {
+    return "Account not found.";
+  }
 
   if (typeof responseData === "string") {
     return responseData;
@@ -123,7 +144,7 @@ const getErrorMessage = (error) => {
     return error.message;
   }
 
-  return "Unable to complete the deposit.";
+  return "Unable to complete the transaction.";
 };
 
 /* =========================================================
@@ -201,11 +222,18 @@ function Deposit() {
   const handleAccountChange = (event) => {
     const value = event.target.value;
 
+    /*
+     * Account ID should contain digits only.
+     */
     if (!/^\d*$/.test(value)) {
       return;
     }
 
     setAccountId(value);
+
+    /*
+     * Changing account invalidates previous verification.
+     */
     setAccountVerified(false);
     setAccountInfo(null);
 
@@ -223,7 +251,14 @@ function Deposit() {
   const handleAmountChange = (event) => {
     const value = event.target.value;
 
-    if (!/^\d*\.?\d{0,2}$/.test(value)) {
+    /*
+     * Allows:
+     * 100
+     * 100.5
+     * 100.50
+     * 0.50
+     */
+    if (!/^\d*(\.\d{0,2})?$/.test(value)) {
       return;
     }
 
@@ -260,6 +295,9 @@ function Deposit() {
     if (!accountId) {
       validationErrors.accountId =
         "Account ID is required.";
+    } else if (!/^\d+$/.test(accountId)) {
+      validationErrors.accountId =
+        "Enter a valid account ID.";
     } else if (Number(accountId) <= 0) {
       validationErrors.accountId =
         "Enter a valid account ID.";
@@ -284,7 +322,7 @@ function Deposit() {
   };
 
   /* =======================================================
-     ACCOUNT VERIFICATION
+     REAL ACCOUNT VERIFICATION
   ======================================================= */
 
   const handleVerifyAccount = async () => {
@@ -297,44 +335,89 @@ function Deposit() {
       return;
     }
 
-    setVerifying(true);
+    if (!/^\d+$/.test(accountId)) {
+      setErrors((previous) => ({
+        ...previous,
+        accountId: "Enter a valid account ID.",
+      }));
 
-    /*
-      No invented verification endpoint is called.
-      This keeps the component compatible with
-      your existing backend.
-    */
+      return;
+    }
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 450)
-    );
+    try {
+      setVerifying(true);
 
-    setAccountVerified(true);
+      setErrors((previous) => ({
+        ...previous,
+        accountId: "",
+      }));
 
-    setAccountInfo({
-      accountNumber: accountId,
-      status: "ACTIVE",
-    });
+      /*
+       * REAL BACKEND CALL
+       *
+       * AccountController:
+       *
+       * GET /api/accounts/{id}
+       *
+       * @PreAuthorize("isAuthenticated()")
+       */
+      const response = await api.get(
+        `/accounts/${accountId}`
+      );
 
-    setVerifying(false);
+      const data = response?.data;
+
+      /*
+       * If backend successfully returns the account,
+       * mark it as verified.
+       */
+      setAccountInfo(data);
+
+      setAccountVerified(true);
+
+      showToast(
+        "success",
+        "Account verified successfully."
+      );
+    } catch (error) {
+      console.error(
+        "Account verification failed:",
+        error
+      );
+
+      setAccountVerified(false);
+      setAccountInfo(null);
+
+      const message = getErrorMessage(error);
+
+      setErrors((previous) => ({
+        ...previous,
+        accountId: message,
+      }));
+
+      showToast("error", message);
+    } finally {
+      setVerifying(false);
+    }
   };
 
   /* =======================================================
      REVIEW
   ======================================================= */
 
-  const handleReview = () => {
+  const handleReview = async () => {
     if (!validate()) {
       return;
     }
 
+    /*
+     * Do NOT automatically mark an account as verified.
+     *
+     * The account must be verified against the backend.
+     */
     if (!accountVerified) {
-      setAccountVerified(true);
-
-      setAccountInfo({
-        accountNumber: accountId,
-        status: "ACTIVE",
-      });
+      await handleVerifyAccount();
+      return;
     }
 
     setReviewOpen(true);
@@ -345,28 +428,64 @@ function Deposit() {
   ======================================================= */
 
   const handleDeposit = async () => {
+    if (!accountId || !isAmountValid) {
+      return;
+    }
+
     setReviewOpen(false);
 
     try {
       setLoading(true);
 
+      setErrors((previous) => ({
+        ...previous,
+        submit: "",
+      }));
+
+      /*
+       * REAL BACKEND ENDPOINT
+       *
+       * POST /api/accounts/{id}/deposit?amount={amount}
+       */
       const response = await api.post(
-        `/accounts/${accountId}/deposit?amount=${numericAmount}`
+        `/accounts/${accountId}/deposit`,
+        null,
+        {
+          params: {
+            amount: numericAmount,
+          },
+        }
       );
 
-      const responseBalance = getResponseBalance(
-        response?.data
+      const data = response?.data;
+
+      console.log(
+        "Deposit response:",
+        data
       );
 
+      const responseBalance =
+        getResponseBalance(data);
+
+      /*
+       * Your current AccountController returns
+       * AccountResponse from the deposit endpoint.
+       *
+       * Therefore transactionId may not exist in
+       * AccountResponse.
+       *
+       * We keep support for it if your backend later
+       * adds transaction information.
+       */
       const transactionId =
-        response?.data?.transactionId ||
-        response?.data?.transaction?.id ||
-        response?.data?.id ||
+        data?.transactionId ||
+        data?.transaction?.id ||
+        data?.id ||
         `DEP-${Date.now()}`;
 
       const timestamp =
-        response?.data?.timestamp ||
-        response?.data?.createdAt ||
+        data?.timestamp ||
+        data?.createdAt ||
         new Date().toISOString();
 
       const receipt = {
@@ -388,6 +507,9 @@ function Deposit() {
         "Deposit completed successfully."
       );
 
+      /*
+       * Clear form after successful transaction.
+       */
       setAccountId("");
       setAmount("");
       setAccountVerified(false);
@@ -900,7 +1022,7 @@ function Deposit() {
                     errors.accountId ||
                     "Example: 10001"
                   }
-                  disabled={loading}
+                  disabled={loading || verifying}
                   slotProps={{
                     htmlInput: {
                       inputMode: "numeric",
@@ -960,6 +1082,10 @@ function Deposit() {
                 </Button>
               </Box>
 
+              {/* =================================================
+                  VERIFIED ACCOUNT
+              ================================================= */}
+
               <Collapse in={accountVerified}>
                 <Paper
                   variant="outlined"
@@ -1000,14 +1126,18 @@ function Deposit() {
                         color="#475467"
                       >
                         Account ID{" "}
-                        {accountInfo?.accountNumber}{" "}
+                        {accountId}{" "}
                         is ready for the deposit request.
                       </Typography>
                     </Box>
 
                     <Chip
                       size="small"
-                      label="ACTIVE"
+                      label={
+                        accountInfo?.status ||
+                        accountInfo?.accountStatus ||
+                        "ACTIVE"
+                      }
                       sx={{
                         fontWeight: 800,
                         bgcolor: "#dcfae6",
@@ -1349,6 +1479,7 @@ function Deposit() {
                 onClick={handleReview}
                 disabled={
                   loading ||
+                  verifying ||
                   !accountId ||
                   !amount ||
                   !isAmountValid
@@ -1369,7 +1500,9 @@ function Deposit() {
                   },
                 }}
               >
-                Review Deposit
+                {accountVerified
+                  ? "Review Deposit"
+                  : "Verify & Review Deposit"}
               </Button>
             </Stack>
 
@@ -2005,9 +2138,7 @@ function Deposit() {
                       size="small"
                       label="COMPLETED"
                       color="success"
-                      icon={
-                        <CheckCircleOutline />
-                      }
+                      icon={<CheckCircle />}
                       sx={{
                         fontWeight: 800,
                       }}

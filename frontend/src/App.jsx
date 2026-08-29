@@ -14,10 +14,41 @@ import Admin from "./pages/Admin";
 import UPI from "./pages/UPI";
 import ScanPay from "./pages/ScanPay";
 
-function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
+function getUserRole() {
+  const storedRole = localStorage.getItem("role");
 
-  return token ? children : <Navigate to="/" replace />;
+  if (storedRole) {
+    return storedRole;
+  }
+
+  try {
+    const user = JSON.parse(
+      localStorage.getItem("user") || "null"
+    );
+
+    return user?.role || null;
+  } catch {
+    return null;
+  }
+}
+function RoleRoute({ role, children }) {
+  const token = localStorage.getItem("token");
+  const userRole = getUserRole();
+
+  if (!token) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (userRole !== role) {
+    return (
+      <Navigate
+        to={userRole === "ADMIN" ? "/admin" : "/dashboard"}
+        replace
+      />
+    );
+  }
+
+  return children;
 }
 
 function ProtectedLayout({ children }) {
@@ -28,121 +59,149 @@ function ProtectedLayout({ children }) {
   );
 }
 
+function UserLayout({ children }) {
+  return (
+    <RoleRoute role="USER">
+      <Layout>{children}</Layout>
+    </RoleRoute>
+  );
+}
+
+function AdminLayout({ children }) {
+  return (
+    <RoleRoute role="ADMIN">
+      <Layout>{children}</Layout>
+    </RoleRoute>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* Login */}
+        {/* ==================== LOGIN ==================== */}
+
         <Route path="/" element={<Login />} />
 
-        {/* Dashboard */}
+
+        {/* ==================== USER DASHBOARD ==================== */}
+
         <Route
           path="/dashboard"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <Dashboard />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* Customers */}
+
+        {/* ==================== USER PAGES ==================== */}
+
         <Route
           path="/customers"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <Customers />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* Accounts */}
         <Route
           path="/accounts"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <Accounts />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* Deposit */}
         <Route
           path="/deposit"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <Deposit />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* Withdraw */}
         <Route
           path="/withdraw"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <Withdraw />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* Transfer */}
         <Route
           path="/transfer"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <Transfer />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* UPI */}
         <Route
           path="/upi"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <UPI />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* Scan & Pay */}
         <Route
           path="/scan-pay"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <ScanPay />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* Transactions */}
         <Route
           path="/transactions"
           element={
-            <ProtectedLayout>
+            <UserLayout>
               <Transactions />
-            </ProtectedLayout>
+            </UserLayout>
           }
         />
 
-        {/* Admin */}
+
+        {/* ==================== ADMIN ==================== */}
+
         <Route
           path="/admin"
           element={
-            <ProtectedLayout>
+            <AdminLayout>
               <Admin />
-            </ProtectedLayout>
+            </AdminLayout>
           }
         />
 
-        {/* Unknown routes */}
+
+        {/* ==================== UNKNOWN ROUTES ==================== */}
+
         <Route
           path="*"
-          element={<Navigate to="/dashboard" replace />}
+          element={
+            <Navigate
+              to={
+                getUserRole() === "ADMIN"
+                  ? "/admin"
+                  : "/dashboard"
+              }
+              replace
+            />
+          }
         />
 
       </Routes>
     </BrowserRouter>
   );
 }
+

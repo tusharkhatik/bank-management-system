@@ -1,4 +1,5 @@
 package com.bank.bankmanagement.exception;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +12,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleResponseStatusException(
@@ -25,6 +28,20 @@ public class GlobalExceptionHandler {
                 .body(body);
     }
 
+@ExceptionHandler(AuthorizationDeniedException.class)
+public ResponseEntity<Map<String, Object>> handleAuthorizationDenied(
+        AuthorizationDeniedException ex) {
+
+    Map<String, Object> body = new LinkedHashMap<>();
+
+    body.put("status", 403);
+    body.put("error", "Forbidden");
+    body.put("message", "Access Denied");
+
+    return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(body);
+}
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleException(Exception ex) {
 

@@ -1,6 +1,7 @@
 package com.bank.bankmanagement.service;
 
 import com.bank.bankmanagement.dto.AuthRequest;
+import com.bank.bankmanagement.dto.LoginRequest;
 import com.bank.bankmanagement.model.Customer;
 import com.bank.bankmanagement.model.User;
 import com.bank.bankmanagement.repository.CustomerRepository;
@@ -29,6 +30,10 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
+
+    // ============================================================
+    // REGISTER
+    // ============================================================
 
     @Transactional
     public String register(AuthRequest request) {
@@ -96,6 +101,12 @@ public class AuthService {
             );
         }
 
+        /*
+         * NORMAL REGISTRATION ALWAYS CREATES USER
+         *
+         * A customer must never be able to register
+         * themselves as ADMIN.
+         */
         User user = new User(
                 username,
                 passwordEncoder.encode(password),
@@ -117,7 +128,11 @@ public class AuthService {
         return "User registered successfully";
     }
 
-    public String login(AuthRequest request) {
+    // ============================================================
+    // LOGIN
+    // ============================================================
+
+    public String login(LoginRequest request) {
 
         if (request == null) {
             throw new RuntimeException(
@@ -135,6 +150,15 @@ public class AuthService {
                         ? ""
                         : request.getPassword();
 
+        String selectedRole =
+                request.getRole() == null
+                        ? ""
+                        : request.getRole().trim().toUpperCase();
+
+        // --------------------------------------------------------
+        // VALIDATION
+        // --------------------------------------------------------
+
         if (username.isEmpty()) {
             throw new RuntimeException(
                     "Username is required"
@@ -147,6 +171,24 @@ public class AuthService {
             );
         }
 
+        if (selectedRole.isEmpty()) {
+            throw new RuntimeException(
+                    "Account type is required"
+            );
+        }
+
+        if (!selectedRole.equals("ADMIN")
+                && !selectedRole.equals("USER")) {
+
+            throw new RuntimeException(
+                    "Invalid account type"
+            );
+        }
+
+        // --------------------------------------------------------
+        // FIND USER
+        // --------------------------------------------------------
+
         User user = userRepository
                 .findByUsername(username)
                 .orElseThrow(() ->
@@ -154,6 +196,10 @@ public class AuthService {
                                 "Invalid username or password"
                         )
                 );
+
+        // --------------------------------------------------------
+        // CHECK PASSWORD
+        // --------------------------------------------------------
 
         if (!passwordEncoder.matches(
                 password,
@@ -163,6 +209,26 @@ public class AuthService {
                     "Invalid username or password"
             );
         }
+
+        // --------------------------------------------------------
+        // CHECK SELECTED ROLE
+        // --------------------------------------------------------
+
+        String actualRole =
+                user.getRole() == null
+                        ? ""
+                        : user.getRole().trim().toUpperCase();
+
+        if (!actualRole.equals(selectedRole)) {
+
+            throw new RuntimeException(
+                    "Selected account type does not match your account"
+            );
+        }
+
+        // --------------------------------------------------------
+        // GENERATE JWT
+        // --------------------------------------------------------
 
         return jwtService.generateToken(user);
     }
