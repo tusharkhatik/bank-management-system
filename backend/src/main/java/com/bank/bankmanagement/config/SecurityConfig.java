@@ -26,169 +26,113 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     public SecurityConfig(
-            JwtAuthenticationFilter jwtAuthenticationFilter
-    ) {
+            JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(
-            HttpSecurity http
-    ) throws Exception {
+            HttpSecurity http) throws Exception {
 
         http
+            // =====================================================
+            // CORS
+            // =====================================================
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-            /*
-             * =====================================================
-             * CORS
-             * =====================================================
-             */
-            .cors(cors ->
-                cors.configurationSource(
-                    corsConfigurationSource()
-                )
-            )
-
-            /*
-             * =====================================================
-             * CSRF
-             * =====================================================
-             *
-             * JWT + Stateless API does not require CSRF protection.
-             */
+            // =====================================================
+            // CSRF
+            // =====================================================
             .csrf(csrf -> csrf.disable())
 
-            /*
-             * =====================================================
-             * SESSION
-             * =====================================================
-             */
+            // =====================================================
+            // SESSION
+            // =====================================================
             .sessionManagement(session ->
                 session.sessionCreationPolicy(
                     SessionCreationPolicy.STATELESS
                 )
             )
 
-            /*
-             * =====================================================
-             * AUTHENTICATION ERROR HANDLER
-             * =====================================================
-             *
-             * Missing/invalid authentication -> HTTP 401.
-             * Authenticated user without permission -> HTTP 403.
-             */
+            // =====================================================
+            // EXCEPTION HANDLING
+            // =====================================================
             .exceptionHandling(exception -> exception
+
                 .authenticationEntryPoint(
-                    (request, response, authException) ->
+                    (request, response, authException) -> {
                         response.sendError(
                             HttpStatus.UNAUTHORIZED.value(),
                             "Unauthorized"
-                        )
+                        );
+                    }
+                )
+
+                .accessDeniedHandler(
+                    (request, response, accessDeniedException) -> {
+                        response.sendError(
+                            HttpStatus.FORBIDDEN.value(),
+                            "Access Denied"
+                        );
+                    }
                 )
             )
 
-            /*
-             * =====================================================
-             * AUTHORIZATION
-             * =====================================================
-             */
+            // =====================================================
+            // AUTHORIZATION
+            // =====================================================
             .authorizeHttpRequests(auth -> auth
 
-                /*
-                 * -------------------------------------------------
-                 * Authentication APIs
-                 * -------------------------------------------------
-                 */
+                // Authentication APIs
                 .requestMatchers(
                     "/api/auth/**"
                 ).permitAll()
 
-                /*
-                 * -------------------------------------------------
-                 * CORS Preflight
-                 * -------------------------------------------------
-                 */
+                // CORS preflight
                 .requestMatchers(
                     HttpMethod.OPTIONS,
                     "/**"
                 ).permitAll()
 
-                /*
-                 * -------------------------------------------------
-                 * Public health/check endpoints if you have them
-                 * -------------------------------------------------
-                 */
+                // Health check
                 .requestMatchers(
                     "/actuator/health"
                 ).permitAll()
 
-                /*
-                 * -------------------------------------------------
-                 * UPI PROFILE LOOKUP
-                 * -------------------------------------------------
-                 *
-                 * A logged-in customer can verify another UPI ID.
-                 *
-                 * This is intentionally authenticated rather than
-                 * ADMIN restricted.
-                 */
+                // UPI profile lookup
                 .requestMatchers(
                     HttpMethod.GET,
                     "/api/upi/profile/**"
                 ).authenticated()
 
-                /*
-                 * -------------------------------------------------
-                 * UPI PAYMENT
-                 * -------------------------------------------------
-                 *
-                 * Payment always requires authentication.
-                 */
+                // UPI payment
                 .requestMatchers(
                     HttpMethod.POST,
                     "/api/upi/pay"
                 ).authenticated()
 
-                /*
-                 * -------------------------------------------------
-                 * Other UPI APIs
-                 * -------------------------------------------------
-                 */
+                // Other UPI APIs
                 .requestMatchers(
                     "/api/upi/**"
                 ).authenticated()
 
-                /*
-                 * -------------------------------------------------
-                 * ADMIN APIs
-                 * -------------------------------------------------
-                 */
+                // ADMIN APIs
                 .requestMatchers(
                     "/api/admin/**"
                 ).hasRole("ADMIN")
 
-                /*
-                 * -------------------------------------------------
-                 * Everything else under /api
-                 * -------------------------------------------------
-                 */
+                // Remaining APIs
                 .requestMatchers(
                     "/api/**"
                 ).authenticated()
 
-                /*
-                 * -------------------------------------------------
-                 * Non-API routes
-                 * -------------------------------------------------
-                 */
+                // Non-API routes
                 .anyRequest().permitAll()
             )
 
-            /*
-             * =====================================================
-             * JWT FILTER
-             * =====================================================
-             */
+            // =====================================================
+            // JWT FILTER
+            // =====================================================
             .addFilterBefore(
                 jwtAuthenticationFilter,
                 UsernamePasswordAuthenticationFilter.class
@@ -197,53 +141,48 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /*
-     * =============================================================
-     * PASSWORD ENCODER
-     * =============================================================
-     */
+    // =============================================================
+    // PASSWORD ENCODER
+    // =============================================================
+
     @Bean
     public PasswordEncoder passwordEncoder() {
-
         return new BCryptPasswordEncoder();
     }
 
-    /*
-     * =============================================================
-     * AUTHENTICATION MANAGER
-     * =============================================================
-     */
+    // =============================================================
+    // AUTHENTICATION MANAGER
+    // =============================================================
+
     @Bean
     public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration configuration
-    ) throws Exception {
+            AuthenticationConfiguration configuration) throws Exception {
 
         return configuration.getAuthenticationManager();
     }
 
-    /*
-     * =============================================================
-     * CORS CONFIGURATION
-     * =============================================================
-     */
+    // =============================================================
+    // CORS CONFIGURATION
+    // =============================================================
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 
-        CorsConfiguration configuration =
-                new CorsConfiguration();
+        CorsConfiguration configuration = new CorsConfiguration();
 
-        /*
-         * React/Vite GitHub Codespaces frontend
-         */
-        configuration.setAllowedOrigins(
-            List.of(
-                "https://silver-waffle-4j65r775v6ggf95-5173.app.github.dev"
-            )
-        );
-
-        /*
-         * HTTP methods
-         */
+        // ---------------------------------------------------------
+        // Allowed frontend origins
+        // ---------------------------------------------------------
+     configuration.setAllowedOrigins(
+    List.of(
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://192.168.0.109:5173"
+    )
+);
+        // ---------------------------------------------------------
+        // Allowed HTTP methods
+        // ---------------------------------------------------------
         configuration.setAllowedMethods(
             List.of(
                 "GET",
@@ -255,9 +194,9 @@ public class SecurityConfig {
             )
         );
 
-        /*
-         * Request headers
-         */
+        // ---------------------------------------------------------
+        // Allowed request headers
+        // ---------------------------------------------------------
         configuration.setAllowedHeaders(
             List.of(
                 "Authorization",
@@ -268,23 +207,23 @@ public class SecurityConfig {
             )
         );
 
-        /*
-         * Response headers
-         */
+        // ---------------------------------------------------------
+        // Exposed response headers
+        // ---------------------------------------------------------
         configuration.setExposedHeaders(
             List.of(
                 "Authorization"
             )
         );
 
-        /*
-         * JWT is sent through Authorization header.
-         */
+        // ---------------------------------------------------------
+        // Credentials
+        // ---------------------------------------------------------
         configuration.setAllowCredentials(true);
 
-        /*
-         * Register CORS for every endpoint.
-         */
+        // ---------------------------------------------------------
+        // Apply CORS to every endpoint
+        // ---------------------------------------------------------
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();
 

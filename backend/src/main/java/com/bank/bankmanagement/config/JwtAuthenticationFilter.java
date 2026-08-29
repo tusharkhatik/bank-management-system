@@ -1,5 +1,7 @@
 package com.bank.bankmanagement.config;
 
+import com.bank.bankmanagement.model.User;
+import com.bank.bankmanagement.repository.UserRepository;
 import com.bank.bankmanagement.service.JwtService;
 
 import jakarta.servlet.FilterChain;
@@ -20,9 +22,14 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            UserRepository userRepository
+    ) {
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -35,10 +42,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String authorizationHeader =
                 request.getHeader("Authorization");
 
+                System.out.println("========== JWT FILTER ==========");
+System.out.println("REQUEST: " + request.getMethod() + " " + request.getRequestURI());
+System.out.println("AUTH HEADER EXISTS: " + (authorizationHeader != null));
+System.out.println("================================");
+
         /*
-         * =====================================================
-         * Authorization header check
-         * =====================================================
+         * No JWT → continue.
+         * Spring Security will decide whether the endpoint
+         * requires authentication.
          */
         if (authorizationHeader == null
                 || !authorizationHeader.startsWith("Bearer ")) {
@@ -47,11 +59,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        /*
-         * =====================================================
-         * Extract JWT token
-         * =====================================================
-         */
         String token =
                 authorizationHeader.substring(7).trim();
 
@@ -60,169 +67,110 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        /*
-         * =====================================================
-         * JWT DEBUG
-         * =====================================================
-         */
-        System.out.println("========== JWT DEBUG ==========");
-        System.out.println(
-                "Request: "
-                        + request.getMethod()
-                        + " "
-                        + request.getRequestURI()
-        );
-
-        System.out.println(
-                "Authorization header present: "
-                        + (authorizationHeader != null)
-        );
-
-        System.out.println(
-                "Token length: "
-                        + token.length()
-        );
-
         try {
 
             /*
-             * =================================================
-             * Validate JWT
-             * =================================================
+             * Validate token first.
              */
-            boolean tokenValid =
-                    jwtService.isTokenValid(token);
+            if (!jwtService.isTokenValid(token)) {
 
-            System.out.println(
-                    "Token valid: "
-                            + tokenValid
-            );
+                SecurityContextHolder.clearContext();
 
-            if (tokenValid) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-                /*
-                 * =============================================
-                 * Extract username and role
-                 * =============================================
-                 */
-                String username =
-                        jwtService.extractUsername(token);
+            /*
+             * Extract username from JWT.
+             */
+            String username =
+                    jwtService.extractUsername(token);
 
-                String role =
-                        jwtService.extractRole(token);
+            if (username == null || username.isBlank()) {
 
-                System.out.println(
-                        "JWT username: "
-                                + username
-                );
+                SecurityContextHolder.clearContext();
 
-                System.out.println(
-                        "JWT role: "
-                                + role
-                );
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-                /*
-                 * =============================================
-                 * Create Spring Security authentication
-                 * =============================================
-                 */
-                if (username != null
-                        && !username.isBlank()
-                        && role != null
-                        && !role.isBlank()
-                        && SecurityContextHolder
-                                .getContext()
-                                .getAuthentication() == null) {
+            /*
+             * Do not blindly trust the role from JWT.
+             *
+             * Load the current user from database.
+             */
+            User user = userRepository
+                    .findByUsername(username)
+                    .orElse(null);
 
-                    String normalizedRole =
-                            role.startsWith("ROLE_")
-                                    ? role.substring(5)
-                                    : role;
+            if (user == null) {
 
-                    SimpleGrantedAuthority authority =
-                            new SimpleGrantedAuthority(
-                                    "ROLE_" + normalizedRole
-                            );
+                SecurityContextHolder.clearContext();
 
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    username,
-                                    null,
-                                    List.of(authority)
-                            );
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-                    SecurityContextHolder
-                            .getContext()
-                            .setAuthentication(authentication);
+            /*
+             * If authentication is not already present,
+             * create Spring Security authentication.
+             */
+            if (SecurityContextHolder
+                    .getContext()
+                    .getAuthentication() == null) {
 
-                    System.out.println(
-                            "JWT AUTHENTICATION SET SUCCESSFULLY"
-                    );
+                String role = user.getRole();
 
-                    System.out.println(
-                            "Authenticated user: "
-                                    + username
-                    );
+                if (role == null || role.isBlank()) {
 
-                    System.out.println(
-                            "Granted authority: ROLE_"
-                                    + normalizedRole
-                    );
+                    SecurityContextHolder.clearContext();
+
+                    filterChain.doFilter(request, response);
+                    return;
                 }
 
-            } else {
+                String normalizedRole =
+                        role.startsWith("ROLE_")
+                                ? role.substring(5)
+                                : role;
+
+                SimpleGrantedAuthority authority =
+                        new SimpleGrantedAuthority(
+                                "ROLE_" + normalizedRole
+                        );
+
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                user.getUsername(),
+                                null,
+                                List.of(authority)
+                        );
+
+                SecurityContextHolder
+                        .getContext()
+                        .setAuthentication(authentication);
 
                 System.out.println(
-                        "JWT TOKEN IS INVALID OR EXPIRED"
+                        "JWT AUTHENTICATED USER: "
+                                + user.getUsername()
+                );
+
+                System.out.println(
+                        "AUTHORITY: ROLE_"
+                                + normalizedRole
                 );
             }
 
-            System.out.println(
-                    "SecurityContext authentication: "
-                            + SecurityContextHolder
-                                    .getContext()
-                                    .getAuthentication()
-            );
-
-            System.out.println(
-                    "==============================="
-            );
-
         } catch (Exception e) {
 
-            /*
-             * =================================================
-             * JWT authentication failure
-             * =================================================
-             */
             SecurityContextHolder.clearContext();
 
             System.err.println(
-                    "========== JWT AUTHENTICATION FAILED =========="
-            );
-
-            System.err.println(
-                    "Exception: "
-                            + e.getClass().getName()
-            );
-
-            System.err.println(
-                    "Message: "
+                    "JWT authentication failed: "
                             + e.getMessage()
-            );
-
-            e.printStackTrace();
-
-            System.err.println(
-                    "================================================"
             );
         }
 
-        /*
-         * =====================================================
-         * Continue filter chain
-         * =====================================================
-         */
         filterChain.doFilter(request, response);
     }
 }

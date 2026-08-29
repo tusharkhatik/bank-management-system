@@ -1,29 +1,33 @@
 package com.bank.bankmanagement.dto;
 
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotNull;
-
+import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 
 public class TransferRequest {
 
-    @NotNull(message = "From account ID is required")
+    @NotNull(message = "Source account ID is required")
+    @Positive(message = "Source account ID must be positive")
     private Long fromAccountId;
 
-    @NotNull(message = "To account ID is required")
+    @NotNull(message = "Destination account ID is required")
+    @Positive(message = "Destination account ID must be positive")
     private Long toAccountId;
 
     @NotNull(message = "Transfer amount is required")
     @DecimalMin(
         value = "0.01",
-        inclusive = true,
-        message = "Transfer amount must be at least 0.01"
+        message = "Transfer amount must be greater than 0"
+    )
+    @DecimalMax(
+        value = "999999.99",
+        message = "Transfer amount exceeds maximum limit"
     )
     private BigDecimal amount;
 
-    public TransferRequest() {
-    }
+    @Size(max = 500, message = "Description cannot exceed 500 characters")
+    private String description;
 
+    // Getters and Setters
     public Long getFromAccountId() {
         return fromAccountId;
     }
@@ -46,5 +50,13 @@ public class TransferRequest {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 }

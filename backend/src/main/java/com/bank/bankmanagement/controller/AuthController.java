@@ -5,6 +5,8 @@ import com.bank.bankmanagement.model.User;
 import com.bank.bankmanagement.repository.UserRepository;
 import com.bank.bankmanagement.service.AuthService;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,10 +28,13 @@ public class AuthController {
         this.userRepository = userRepository;
     }
 
+    // ============================================================
+    // REGISTER
+    // ============================================================
+
     @PostMapping("/register")
     public ResponseEntity<?> register(
-            @RequestBody AuthRequest request
-    ) {
+            @Valid @RequestBody AuthRequest request) {
 
         return ResponseEntity.ok(
                 Map.of(
@@ -39,10 +44,13 @@ public class AuthController {
         );
     }
 
+    // ============================================================
+    // LOGIN
+    // ============================================================
+
     @PostMapping("/login")
     public ResponseEntity<?> login(
-            @RequestBody AuthRequest request
-    ) {
+            @RequestBody AuthRequest request) {
 
         String token = authService.login(request);
 

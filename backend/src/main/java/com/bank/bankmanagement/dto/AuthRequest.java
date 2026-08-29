@@ -1,17 +1,40 @@
+
 package com.bank.bankmanagement.dto;
+
+import jakarta.validation.constraints.*;
 
 public class AuthRequest {
 
+    @NotBlank(message = "Username is required")
+    @Size(min = 3, max = 50, message = "Username must be 3-50 characters")
+    @Pattern(
+        regexp = "^[a-zA-Z0-9_.-]+$",
+        message = "Username can only contain letters, numbers, dots, hyphens, and underscores"
+    )
     private String username;
+
+    @NotBlank(message = "Password is required")
+    @Size(
+        min = 6,
+        max = 128,
+        message = "Password must be 6-128 characters"
+    )
     private String password;
-    private String role;
 
+    @NotBlank(message = "Name is required")
+    @Size(min = 2, max = 100, message = "Name must be 2-100 characters")
     private String name;
-    private String email;
-    private String phone;
 
-    public AuthRequest() {
-    }
+    @NotBlank(message = "Email is required")
+    @Email(message = "Invalid email address")
+    private String email;
+
+    @NotBlank(message = "Phone is required")
+    @Pattern(
+        regexp = "^[0-9]{10}$",
+        message = "Phone must be 10 digits"
+    )
+    private String phone;
 
     public String getUsername() {
         return username;
@@ -27,14 +50,6 @@ public class AuthRequest {
 
     public void setPassword(String password) {
         this.password = password;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
     }
 
     public String getName() {
@@ -61,3 +76,4 @@ public class AuthRequest {
         this.phone = phone;
     }
 }
+

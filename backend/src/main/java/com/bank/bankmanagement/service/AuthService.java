@@ -34,66 +34,82 @@ public class AuthService {
     public String register(AuthRequest request) {
 
         if (request == null) {
-            throw new RuntimeException("Registration request is required");
+            throw new RuntimeException(
+                    "Registration request is required"
+            );
         }
 
-        if (request.getUsername() == null ||
-                request.getUsername().trim().isEmpty()) {
+        String username =
+                request.getUsername() == null
+                        ? ""
+                        : request.getUsername().trim();
 
+        String password =
+                request.getPassword() == null
+                        ? ""
+                        : request.getPassword();
+
+        String name =
+                request.getName() == null
+                        ? ""
+                        : request.getName().trim();
+
+        String email =
+                request.getEmail() == null
+                        ? ""
+                        : request.getEmail().trim();
+
+        String phone =
+                request.getPhone() == null
+                        ? ""
+                        : request.getPhone().trim();
+
+        if (username.isEmpty()) {
             throw new RuntimeException("Username is required");
         }
 
-        if (request.getPassword() == null ||
-                request.getPassword().isEmpty()) {
-
+        if (password.isEmpty()) {
             throw new RuntimeException("Password is required");
         }
 
-        if (request.getName() == null ||
-                request.getName().trim().isEmpty()) {
-
+        if (name.isEmpty()) {
             throw new RuntimeException("Name is required");
         }
 
-        if (request.getEmail() == null ||
-                request.getEmail().trim().isEmpty()) {
-
+        if (email.isEmpty()) {
             throw new RuntimeException("Email is required");
         }
 
-        if (request.getPhone() == null ||
-                request.getPhone().trim().isEmpty()) {
-
+        if (phone.isEmpty()) {
             throw new RuntimeException("Phone is required");
         }
 
-        String username = request.getUsername().trim();
-        String email = request.getEmail().trim();
-
         if (userRepository.existsByUsername(username)) {
-            throw new RuntimeException("Username already exists");
+            throw new RuntimeException(
+                    "Username already exists"
+            );
         }
 
         if (customerRepository.existsByEmail(email)) {
-            throw new RuntimeException("Email already exists");
+            throw new RuntimeException(
+                    "Email already exists"
+            );
         }
-
-        String encodedPassword =
-                passwordEncoder.encode(request.getPassword());
 
         User user = new User(
                 username,
-                encodedPassword,
+                passwordEncoder.encode(password),
                 "USER"
         );
 
-        User savedUser = userRepository.save(user);
+        User savedUser =
+                userRepository.save(user);
 
         Customer customer = new Customer();
 
-        customer.setName(request.getName().trim());
+        customer.setName(name);
         customer.setEmail(email);
-        customer.setPhone(request.getPhone().trim());
+        customer.setPhone(phone);
         customer.setUser(savedUser);
 
         customerRepository.save(customer);
@@ -104,22 +120,32 @@ public class AuthService {
     public String login(AuthRequest request) {
 
         if (request == null) {
-            throw new RuntimeException("Login request is required");
+            throw new RuntimeException(
+                    "Login request is required"
+            );
         }
 
-        if (request.getUsername() == null ||
-                request.getUsername().trim().isEmpty()) {
+        String username =
+                request.getUsername() == null
+                        ? ""
+                        : request.getUsername().trim();
 
-            throw new RuntimeException("Username is required");
+        String password =
+                request.getPassword() == null
+                        ? ""
+                        : request.getPassword();
+
+        if (username.isEmpty()) {
+            throw new RuntimeException(
+                    "Username is required"
+            );
         }
 
-        if (request.getPassword() == null ||
-                request.getPassword().isEmpty()) {
-
-            throw new RuntimeException("Password is required");
+        if (password.isEmpty()) {
+            throw new RuntimeException(
+                    "Password is required"
+            );
         }
-
-        String username = request.getUsername().trim();
 
         User user = userRepository
                 .findByUsername(username)
@@ -130,7 +156,7 @@ public class AuthService {
                 );
 
         if (!passwordEncoder.matches(
-                request.getPassword(),
+                password,
                 user.getPassword()
         )) {
             throw new RuntimeException(

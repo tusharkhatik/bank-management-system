@@ -2,52 +2,57 @@ package com.bank.bankmanagement.config;
 
 import com.bank.bankmanagement.model.User;
 import com.bank.bankmanagement.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Component;
 
-@Component
-public class AdminInitializer implements CommandLineRunner {
+@Configuration
+public class AdminInitializer {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-
-    @Value("${ADMIN_USERNAME:}")
-    private String adminUsername;
-
-    @Value("${ADMIN_PASSWORD:}")
-    private String adminPassword;
-
-    public AdminInitializer(
+    @Bean
+    CommandLineRunner createDefaultAdmin(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder
+    ) {
+        return args -> {
 
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
+            String username = "admin";
+            String password = "admin@123";
 
-    @Override
-    public void run(String... args) {
+            if (!userRepository.existsByUsername(username)) {
 
-        if (adminUsername == null ||
-                adminUsername.isBlank() ||
-                adminPassword == null ||
-                adminPassword.isBlank()) {
+                User admin = new User(
+                        username,
+                        passwordEncoder.encode(password),
+                        "ADMIN"
+                );
 
-            return;
-        }
+                userRepository.save(admin);
 
-        if (userRepository.existsByUsername(adminUsername)) {
-            return;
-        }
+                System.out.println(
+                        "========================================"
+                );
+                System.out.println(
+                        "Default ADMIN user created"
+                );
+                System.out.println(
+                        "Username: admin"
+                );
+                System.out.println(
+                        "Password: admin@123"
+                );
+                System.out.println(
+                        "========================================"
+                );
 
-        User admin = new User(
-                adminUsername.trim(),
-                passwordEncoder.encode(adminPassword),
-                "ADMIN"
-        );
+            } else {
 
-        userRepository.save(admin);
+                System.out.println(
+                        "ADMIN user already exists"
+                );
+            }
+        };
     }
 }

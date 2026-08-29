@@ -9,6 +9,7 @@ import com.bank.bankmanagement.service.AccountService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -24,26 +25,32 @@ public class AccountController {
     }
 
     // =========================================================
-    // CREATE ACCOUNT
+    // CREATE ACCOUNT - ADMIN ONLY
     // =========================================================
 
-    @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public AccountResponse createAccount(
-            @RequestBody AccountRequest request) {
-
-        return accountService.createAccount(request);
-    }
+   @PostMapping
+@PreAuthorize("hasRole('ADMIN')")
+public AccountResponse createAccount(
+        @Valid @RequestBody AccountRequest request) {  // ADD @Valid
+    
+    return accountService.createAccount(request);
+}
 
     // =========================================================
-    // GET ALL ACCOUNTS
+    // GET ACCOUNTS
+    // =========================================================
+    //
+    // ADMIN -> all accounts
+    // USER  -> only own accounts
+    //
+    // AccountService handles the ownership filtering.
     // =========================================================
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public List<AccountResponse> getAllAccounts() {
+    @PreAuthorize("isAuthenticated()")
+    public List<AccountResponse> getAccounts() {
 
-        return accountService.getAllAccounts();
+        return accountService.getAccountsForCurrentUser();
     }
 
     // =========================================================
@@ -55,10 +62,9 @@ public class AccountController {
     public ResponseEntity<AccountResponse> getAccountById(
             @PathVariable Long id) {
 
-        AccountResponse account =
-                accountService.getAccountById(id);
-
-        return ResponseEntity.ok(account);
+        return ResponseEntity.ok(
+                accountService.getAccountById(id)
+        );
     }
 
     // =========================================================
@@ -91,18 +97,18 @@ public class AccountController {
     // TRANSFER
     // =========================================================
 
-    @PostMapping("/transfer")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<String> transfer(
-            @RequestBody TransferRequest request) {
-
-        accountService.transfer(request);
-
-        return ResponseEntity.ok("Transfer successful");
-    }
+   @PostMapping("/transfer")
+@PreAuthorize("isAuthenticated()")
+public ResponseEntity<String> transfer(
+        @Valid @RequestBody TransferRequest request) {  // ADD @Valid
+    
+    accountService.transfer(request);
+    
+    return ResponseEntity.ok("Transfer successful");
+}
 
     // =========================================================
-    // UPDATE ACCOUNT
+    // UPDATE ACCOUNT - ADMIN ONLY
     // =========================================================
 
     @PutMapping("/{id}")
@@ -115,7 +121,7 @@ public class AccountController {
     }
 
     // =========================================================
-    // BLOCK ACCOUNT
+    // BLOCK ACCOUNT - ADMIN ONLY
     // =========================================================
 
     @PatchMapping("/{id}/block")
@@ -127,7 +133,7 @@ public class AccountController {
     }
 
     // =========================================================
-    // UNBLOCK ACCOUNT
+    // UNBLOCK ACCOUNT - ADMIN ONLY
     // =========================================================
 
     @PatchMapping("/{id}/unblock")
@@ -139,7 +145,7 @@ public class AccountController {
     }
 
     // =========================================================
-    // CLOSE ACCOUNT
+    // CLOSE ACCOUNT - ADMIN ONLY
     // =========================================================
 
     @PatchMapping("/{id}/close")
@@ -151,7 +157,7 @@ public class AccountController {
     }
 
     // =========================================================
-    // DELETE ACCOUNT
+    // DELETE ACCOUNT - ADMIN ONLY
     // =========================================================
 
     @DeleteMapping("/{id}")

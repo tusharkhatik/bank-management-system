@@ -67,4 +67,14 @@ public class UpiProfileController {
                 )
         );
     }
+@GetMapping("/profile/me")
+public ResponseEntity<UpiProfileResponse> getMyProfile() {
+
+    return ResponseEntity.ok(
+            new UpiProfileResponse(
+                    upiProfileService.getMyProfile()
+            )
+    );
+}
+
 }

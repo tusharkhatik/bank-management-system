@@ -36,4 +36,17 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             Long id,
             String username
     );
+
+    // =========================================================
+    // CURRENT USER ACCOUNTS
+    // =========================================================
+
+    @Query("""
+            SELECT a
+            FROM Account a
+            JOIN FETCH a.customer c
+            JOIN c.user u
+            WHERE u.username = :username
+            """)
+    List<Account> findAllByOwnerUsername(String username);
 }

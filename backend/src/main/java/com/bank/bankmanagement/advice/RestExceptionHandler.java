@@ -1,4 +1,5 @@
 package com.bank.bankmanagement.advice;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.bank.bankmanagement.exception.BadRequestException;
 import com.bank.bankmanagement.exception.ErrorResponse;
@@ -72,6 +73,7 @@ public class RestExceptionHandler {
         );
     }
 
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<?> handleConstraintViolation(
             ConstraintViolationException ex,
@@ -83,7 +85,17 @@ public class RestExceptionHandler {
                 req
         );
     }
+@ExceptionHandler(ResponseStatusException.class)
+public ResponseEntity<?> handleResponseStatusException(
+        ResponseStatusException ex,
+        WebRequest req) {
 
+    return buildResponse(
+            HttpStatus.valueOf(ex.getStatusCode().value()),
+            ex.getReason(),
+            req
+    );
+}
     /*
      * =========================================================
      * GLOBAL EXCEPTION HANDLER

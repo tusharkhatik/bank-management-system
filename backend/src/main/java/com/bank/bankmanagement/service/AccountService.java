@@ -9,7 +9,6 @@ import com.bank.bankmanagement.exception.InsufficientFundsException;
 import com.bank.bankmanagement.exception.NotFoundException;
 import com.bank.bankmanagement.model.Account;
 import com.bank.bankmanagement.model.AccountStatus;
-import com.bank.bankmanagement.model.AccountType;
 import com.bank.bankmanagement.model.Customer;
 import com.bank.bankmanagement.model.Transaction;
 import com.bank.bankmanagement.repository.AccountRepository;
@@ -42,15 +41,69 @@ public class AccountService {
     }
 
     // =========================================================
+    // GET ACCOUNTS FOR CURRENT USER
+    // ADMIN -> ALL ACCOUNTS
+    // USER  -> OWN ACCOUNTS
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<AccountResponse> getAccountsForCurrentUser() {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null ||
+                !authentication.isAuthenticated()) {
+
+            throw new BadRequestException(
+                    "Authentication is required"
+            );
+        }
+
+        String username = authentication.getName();
+
+        boolean isAdmin =
+                authentication.getAuthorities()
+                        .stream()
+                        .anyMatch(authority ->
+                                "ROLE_ADMIN".equals(
+                                        authority.getAuthority()
+                                )
+                        );
+
+        List<Account> accounts;
+
+        if (isAdmin) {
+
+            accounts = accountRepository.findAllWithCustomer();
+
+        } else {
+
+            accounts =
+                    accountRepository
+                            .findAllByOwnerUsername(username);
+        }
+
+        return accounts.stream()
+                .map(this::toAccountResponse)
+                .toList();
+    }
+
+    // =========================================================
     // DEPOSIT
     // =========================================================
 
     @Transactional
-    public AccountResponse deposit(Long id, BigDecimal amount) {
+    public AccountResponse deposit(
+            Long id,
+            BigDecimal amount) {
 
         validateAmount(amount, "Deposit");
 
-        Account account = findAccountForCurrentUser(id);
+        Account account =
+                findAccountForCurrentUser(id);
 
         validateAccountActive(account);
 
@@ -58,14 +111,16 @@ public class AccountService {
                 account.getBalance().add(amount)
         );
 
-        Account savedAccount = accountRepository.save(account);
+        Account savedAccount =
+                accountRepository.save(account);
 
-        Transaction transaction = new Transaction(
-                "DEPOSIT",
-                amount,
-                null,
-                savedAccount
-        );
+        Transaction transaction =
+                new Transaction(
+                        "DEPOSIT",
+                        amount,
+                        null,
+                        savedAccount
+                );
 
         transactionRepository.save(transaction);
 
@@ -77,15 +132,20 @@ public class AccountService {
     // =========================================================
 
     @Transactional
-    public AccountResponse withdraw(Long id, BigDecimal amount) {
+    public AccountResponse withdraw(
+            Long id,
+            BigDecimal amount) {
 
         validateAmount(amount, "Withdrawal");
 
-        Account account = findAccountForCurrentUser(id);
+        Account account =
+                findAccountForCurrentUser(id);
 
         validateAccountActive(account);
 
-        if (account.getBalance().compareTo(amount) < 0) {
+        if (account.getBalance()
+                .compareTo(amount) < 0) {
+
             throw new InsufficientFundsException(
                     "Insufficient balance"
             );
@@ -95,14 +155,16 @@ public class AccountService {
                 account.getBalance().subtract(amount)
         );
 
-        Account savedAccount = accountRepository.save(account);
+        Account savedAccount =
+                accountRepository.save(account);
 
-        Transaction transaction = new Transaction(
-                "WITHDRAW",
-                amount,
-                savedAccount,
-                null
-        );
+        Transaction transaction =
+                new Transaction(
+                        "WITHDRAW",
+                        amount,
+                        savedAccount,
+                        null
+                );
 
         transactionRepository.save(transaction);
 
@@ -114,7 +176,8 @@ public class AccountService {
     // =========================================================
 
     @Transactional
-    public void transfer(TransferRequest request) {
+    public void transfer(
+            TransferRequest request) {
 
         if (request == null ||
                 request.getFromAccountId() == null ||
@@ -126,13 +189,13 @@ public class AccountService {
             );
         }
 
-        BigDecimal amount = request.getAmount();
+        BigDecimal amount =
+                request.getAmount();
 
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadRequestException(
-                    "Transfer amount must be greater than zero"
-            );
-        }
+        validateAmount(
+                amount,
+                "Transfer"
+        );
 
         if (request.getFromAccountId()
                 .equals(request.getToAccountId())) {
@@ -181,22 +244,24 @@ public class AccountService {
         accountRepository.save(fromAccount);
         accountRepository.save(toAccount);
 
-        Transaction transaction = new Transaction(
-                "TRANSFER",
-                amount,
-                fromAccount,
-                toAccount
-        );
+        Transaction transaction =
+                new Transaction(
+                        "TRANSFER",
+                        amount,
+                        fromAccount,
+                        toAccount
+                );
 
         transactionRepository.save(transaction);
     }
 
     // =========================================================
-    // CREATE ACCOUNT
+    // CREATE ACCOUNT - ADMIN
     // =========================================================
 
     @Transactional
-    public AccountResponse createAccount(AccountRequest request) {
+    public AccountResponse createAccount(
+            AccountRequest request) {
 
         if (request == null) {
             throw new BadRequestException(
@@ -211,7 +276,9 @@ public class AccountService {
         }
 
         if (request.getAccountNumber() == null ||
-                request.getAccountNumber().trim().isEmpty()) {
+                request.getAccountNumber()
+                        .trim()
+                        .isEmpty()) {
 
             throw new BadRequestException(
                     "Account number is required"
@@ -226,40 +293,33 @@ public class AccountService {
                                         "Customer not found"
                                 ));
 
-        BigDecimal balance = request.getBalance();
+        BigDecimal balance =
+                request.getInitialBalance();
 
         if (balance == null) {
             balance = BigDecimal.ZERO;
         }
 
-        if (balance.compareTo(BigDecimal.ZERO) < 0) {
+        if (balance.compareTo(
+                BigDecimal.ZERO) < 0) {
+
             throw new BadRequestException(
                     "Initial balance cannot be negative"
             );
         }
 
-        Account account = new Account(
-                request.getAccountNumber().trim(),
-                balance,
-                customer
-        );
+        Account account =
+                new Account(
+                        request.getAccountNumber()
+                                .trim(),
+                        balance,
+                        customer
+                );
 
-        Account savedAccount = accountRepository.save(account);
+        Account savedAccount =
+                accountRepository.save(account);
 
         return toAccountResponse(savedAccount);
-    }
-
-    // =========================================================
-    // GET ALL ACCOUNTS
-    // =========================================================
-
-    @Transactional(readOnly = true)
-    public List<AccountResponse> getAllAccounts() {
-
-        return accountRepository.findAllWithCustomer()
-                .stream()
-                .map(this::toAccountResponse)
-                .toList();
     }
 
     // =========================================================
@@ -267,15 +327,17 @@ public class AccountService {
     // =========================================================
 
     @Transactional(readOnly = true)
-    public AccountResponse getAccountById(Long id) {
+    public AccountResponse getAccountById(
+            Long id) {
 
-        Account account = findAccountForCurrentUser(id);
+        Account account =
+                findAccountForCurrentUser(id);
 
         return toAccountResponse(account);
     }
 
     // =========================================================
-    // UPDATE ACCOUNT
+    // UPDATE ACCOUNT - ADMIN
     // =========================================================
 
     @Transactional
@@ -290,7 +352,8 @@ public class AccountService {
         }
 
         Account account =
-                accountRepository.findByIdWithCustomer(id)
+                accountRepository
+                        .findByIdWithCustomer(id)
                         .orElseThrow(() ->
                                 new NotFoundException(
                                         "Account not found"
@@ -302,15 +365,19 @@ public class AccountService {
                     request.getAccountNumber().trim();
 
             if (accountNumber.isEmpty()) {
+
                 throw new BadRequestException(
                         "Account number cannot be empty"
                 );
             }
 
-            account.setAccountNumber(accountNumber);
+            account.setAccountNumber(
+                    accountNumber
+            );
         }
 
         if (request.getAccountType() != null) {
+
             account.setAccountType(
                     request.getAccountType()
             );
@@ -323,76 +390,137 @@ public class AccountService {
     }
 
     // =========================================================
-    // ACCOUNT STATUS MANAGEMENT
+    // BLOCK ACCOUNT - ADMIN
     // =========================================================
 
     @Transactional
-    public AccountResponse blockAccount(Long id) {
+    public AccountResponse blockAccount(
+            Long id) {
 
-        Account account = accountRepository.findByIdWithCustomer(id)
-                .orElseThrow(() ->
-                        new NotFoundException("Account not found"));
+        Account account =
+                accountRepository
+                        .findByIdWithCustomer(id)
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Account not found"
+                                ));
 
-        if (account.getStatus() == AccountStatus.CLOSED) {
+        if (account.getStatus() ==
+                AccountStatus.CLOSED) {
+
             throw new BadRequestException(
                     "Closed account cannot be blocked"
             );
         }
 
-        account.setStatus(AccountStatus.BLOCKED);
+        account.setStatus(
+                AccountStatus.BLOCKED
+        );
 
         return toAccountResponse(
                 accountRepository.save(account)
         );
     }
 
+    // =========================================================
+    // UNBLOCK ACCOUNT - ADMIN
+    // =========================================================
+
     @Transactional
-    public AccountResponse unblockAccount(Long id) {
+    public AccountResponse unblockAccount(
+            Long id) {
 
-        Account account = accountRepository.findByIdWithCustomer(id)
-                .orElseThrow(() ->
-                        new NotFoundException("Account not found"));
+        Account account =
+                accountRepository
+                        .findByIdWithCustomer(id)
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Account not found"
+                                ));
 
-        if (account.getStatus() == AccountStatus.CLOSED) {
+        if (account.getStatus() ==
+                AccountStatus.CLOSED) {
+
             throw new BadRequestException(
                     "Closed account cannot be unblocked"
             );
         }
 
-        account.setStatus(AccountStatus.ACTIVE);
+        account.setStatus(
+                AccountStatus.ACTIVE
+        );
 
         return toAccountResponse(
                 accountRepository.save(account)
         );
     }
 
+    // =========================================================
+    // CLOSE ACCOUNT - ADMIN
+    // =========================================================
+
     @Transactional
-    public AccountResponse closeAccount(Long id) {
+    public AccountResponse closeAccount(
+            Long id) {
 
-        Account account = accountRepository.findByIdWithCustomer(id)
-                .orElseThrow(() ->
-                        new NotFoundException("Account not found"));
+        Account account =
+                accountRepository
+                        .findByIdWithCustomer(id)
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Account not found"
+                                ));
 
-        if (account.getStatus() == AccountStatus.CLOSED) {
+        if (account.getStatus() ==
+                AccountStatus.CLOSED) {
+
             throw new BadRequestException(
                     "Account is already closed"
             );
         }
 
-        if (account.getBalance().compareTo(BigDecimal.ZERO) != 0) {
+        if (account.getBalance()
+                .compareTo(BigDecimal.ZERO) != 0) {
+
             throw new BadRequestException(
                     "Account balance must be zero before closing"
             );
         }
 
-        account.setStatus(AccountStatus.CLOSED);
+        account.setStatus(
+                AccountStatus.CLOSED
+        );
 
         return toAccountResponse(
                 accountRepository.save(account)
         );
     }
 
-    private Account findAccountForCurrentUser(Long id) {
+    // =========================================================
+    // DELETE ACCOUNT - ADMIN
+    // =========================================================
+
+    @Transactional
+    public void deleteAccount(
+            Long id) {
+
+        Account account =
+                accountRepository
+                        .findById(id)
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Account not found"
+                                ));
+
+        accountRepository.delete(account);
+    }
+
+    // =========================================================
+    // FIND ACCOUNT FOR CURRENT USER
+    // =========================================================
+
+    private Account findAccountForCurrentUser(
+            Long id) {
 
         Authentication authentication =
                 SecurityContextHolder
@@ -416,7 +544,8 @@ public class AccountService {
                         .anyMatch(authority ->
                                 "ROLE_ADMIN".equals(
                                         authority.getAuthority()
-                                ));
+                                )
+                        );
 
         if (isAdmin) {
 
@@ -429,48 +558,45 @@ public class AccountService {
         }
 
         return accountRepository
-                .findByIdAndOwnerUsername(id, username)
+                .findByIdAndOwnerUsername(
+                        id,
+                        username
+                )
                 .orElseThrow(() ->
                         new NotFoundException(
                                 "Account not found"
                         ));
     }
 
-    private void validateAccountActive(Account account) {
+    // =========================================================
+    // VALIDATE ACCOUNT STATUS
+    // =========================================================
 
-        if (account.getStatus() != AccountStatus.ACTIVE) {
+    private void validateAccountActive(
+            Account account) {
+
+        if (account.getStatus() !=
+                AccountStatus.ACTIVE) {
+
             throw new BadRequestException(
                     "Account is " +
-                    account.getStatus().name().toLowerCase() +
+                    account.getStatus()
+                            .name()
+                            .toLowerCase() +
                     " and cannot perform this transaction"
             );
         }
     }
 
     // =========================================================
-    // DELETE ACCOUNT
-    // =========================================================
-
-    @Transactional
-    public void deleteAccount(Long id) {
-
-        Account account =
-                accountRepository.findById(id)
-                        .orElseThrow(() ->
-                                new NotFoundException(
-                                        "Account not found"
-                                ));
-
-        accountRepository.delete(account);
-    }
-
-    // =========================================================
     // ACCOUNT RESPONSE MAPPER
     // =========================================================
 
-    private AccountResponse toAccountResponse(Account account) {
+    private AccountResponse toAccountResponse(
+            Account account) {
 
-        Customer customer = account.getCustomer();
+        Customer customer =
+                account.getCustomer();
 
         return new AccountResponse(
                 account.getId(),
@@ -494,7 +620,8 @@ public class AccountService {
             String operation) {
 
         if (amount == null ||
-                amount.compareTo(BigDecimal.ZERO) <= 0) {
+                amount.compareTo(
+                        BigDecimal.ZERO) <= 0) {
 
             throw new BadRequestException(
                     operation +
@@ -503,3 +630,4 @@ public class AccountService {
         }
     }
 }
+
