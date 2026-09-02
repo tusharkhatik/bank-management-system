@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   AccountBalance,
@@ -9,7 +10,6 @@ import {
   History,
   InfoOutlined,
   Lock,
-  MoreHoriz,
   ReceiptLong,
   Security,
   Shield,
@@ -67,9 +67,14 @@ const formatNumber = (value) =>
 const getResponseBalance = (data) => {
   if (data === null || data === undefined) return null;
 
-  if (typeof data === "number") return data;
+  if (typeof data === "number") {
+    return data;
+  }
 
-  if (typeof data === "string" && !Number.isNaN(Number(data))) {
+  if (
+    typeof data === "string" &&
+    !Number.isNaN(Number(data))
+  ) {
     return Number(data);
   }
 
@@ -119,6 +124,12 @@ const getErrorMessage = (error) => {
 ========================================================= */
 
 function Withdraw() {
+  const navigate = useNavigate();
+
+  /* =======================================================
+     STATE
+  ======================================================= */
+
   const [accountId, setAccountId] = useState("");
   const [amount, setAmount] = useState("");
 
@@ -146,11 +157,19 @@ function Withdraw() {
   const dailyLimit = 100000;
 
   /* =======================================================
+     RECENT WITHDRAWALS
+  ======================================================= */
+
+  const [recentWithdrawals, setRecentWithdrawals] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  /* =======================================================
      CALCULATIONS
   ======================================================= */
 
   const numericAmount = useMemo(() => {
     const parsed = Number(amount);
+
     return Number.isFinite(parsed) ? parsed : 0;
   }, [amount]);
 
@@ -160,7 +179,8 @@ function Withdraw() {
   );
 
   const isAmountValid =
-    numericAmount >= 1 && numericAmount <= dailyLimit;
+    numericAmount >= 1 &&
+    numericAmount <= dailyLimit;
 
   /* =======================================================
      TOAST
@@ -175,15 +195,70 @@ function Withdraw() {
   };
 
   /* =======================================================
+     LOAD RECENT WITHDRAWALS
+  ======================================================= */
+
+  const loadRecentWithdrawals = async () => {
+    try {
+      setHistoryLoading(true);
+
+      const response = await api.get("/transactions/my");
+
+      const transactions = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.data?.content)
+        ? response.data.content
+        : [];
+
+      const withdrawals = transactions
+        .filter((transaction) => {
+          const type = String(
+            transaction?.type || ""
+          ).toUpperCase();
+
+          return (
+            type === "WITHDRAW" ||
+            type === "WITHDRAWAL"
+          );
+        })
+        .sort(
+          (a, b) =>
+            new Date(b?.timestamp || b?.createdAt || 0) -
+            new Date(a?.timestamp || a?.createdAt || 0)
+        )
+        .slice(0, 3);
+
+      setRecentWithdrawals(withdrawals);
+    } catch (error) {
+      console.error(
+        "Unable to load recent withdrawals:",
+        error
+      );
+
+      setRecentWithdrawals([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRecentWithdrawals();
+  }, []);
+
+  /* =======================================================
      ACCOUNT INPUT
   ======================================================= */
 
   const handleAccountChange = (event) => {
     const value = event.target.value;
 
-    if (!/^\d*$/.test(value)) return;
+    // Only numbers are allowed
+    if (!/^\d*$/.test(value)) {
+      return;
+    }
 
     setAccountId(value);
+
     setAccountVerified(false);
     setAccountInfo(null);
 
@@ -201,7 +276,10 @@ function Withdraw() {
   const handleAmountChange = (event) => {
     const value = event.target.value;
 
-    if (!/^\d*\.?\d{0,2}$/.test(value)) return;
+    // Allows numbers and up to 2 decimal places
+    if (!/^\d*\.?\d{0,2}$/.test(value)) {
+      return;
+    }
 
     setAmount(value);
 
@@ -234,18 +312,24 @@ function Withdraw() {
     const validationErrors = {};
 
     if (!accountId) {
-      validationErrors.accountId = "Account ID is required.";
+      validationErrors.accountId =
+        "Account ID is required.";
     } else if (Number(accountId) <= 0) {
-      validationErrors.accountId = "Enter a valid account ID.";
+      validationErrors.accountId =
+        "Enter a valid account ID.";
     }
 
     if (!amount) {
-      validationErrors.amount = "Withdrawal amount is required.";
+      validationErrors.amount =
+        "Withdrawal amount is required.";
     } else if (numericAmount <= 0) {
-      validationErrors.amount = "Amount must be greater than ₹0.";
+      validationErrors.amount =
+        "Amount must be greater than ₹0.";
     } else if (numericAmount > dailyLimit) {
       validationErrors.amount =
-        `Maximum withdrawal limit is ${formatCurrency(dailyLimit)}.`;
+        `Maximum withdrawal limit is ${formatCurrency(
+          dailyLimit
+        )}.`;
     }
 
     setErrors(validationErrors);
@@ -261,8 +345,10 @@ function Withdraw() {
     if (!accountId) {
       setErrors((previous) => ({
         ...previous,
-        accountId: "Enter an account ID first.",
+        accountId:
+          "Enter an account ID first.",
       }));
+
       return;
     }
 
@@ -270,10 +356,13 @@ function Withdraw() {
 
     try {
       /*
-       * No invented verification endpoint is called.
-       * This keeps compatibility with your existing backend.
+       * Existing compatibility behavior.
+       * The actual withdrawal request is still
+       * validated by the backend.
        */
-      await new Promise((resolve) => setTimeout(resolve, 450));
+      await new Promise((resolve) =>
+        setTimeout(resolve, 450)
+      );
 
       setAccountVerified(true);
 
@@ -296,7 +385,9 @@ function Withdraw() {
   ======================================================= */
 
   const handleReview = () => {
-    if (!validate()) return;
+    if (!validate()) {
+      return;
+    }
 
     if (!accountVerified) {
       setAccountVerified(true);
@@ -324,7 +415,8 @@ function Withdraw() {
         `/accounts/${accountId}/withdraw?amount=${numericAmount}`
       );
 
-      const responseBalance = getResponseBalance(response?.data);
+      const responseBalance =
+        getResponseBalance(response?.data);
 
       const transactionId =
         response?.data?.transactionId ||
@@ -348,7 +440,14 @@ function Withdraw() {
       };
 
       setResult(receipt);
+
       setReceiptOpen(true);
+
+      /*
+       * Refresh transaction history so the
+       * new withdrawal appears immediately.
+       */
+      await loadRecentWithdrawals();
 
       showToast(
         "success",
@@ -357,11 +456,16 @@ function Withdraw() {
 
       setAccountId("");
       setAmount("");
+
       setAccountVerified(false);
       setAccountInfo(null);
+
       setErrors({});
     } catch (error) {
-      console.error("Withdrawal failed:", error);
+      console.error(
+        "Withdrawal failed:",
+        error
+      );
 
       const message = getErrorMessage(error);
 
@@ -383,8 +487,10 @@ function Withdraw() {
   const handleReset = () => {
     setAccountId("");
     setAmount("");
+
     setAccountVerified(false);
     setAccountInfo(null);
+
     setErrors({});
   };
 
@@ -393,7 +499,9 @@ function Withdraw() {
   ======================================================= */
 
   const copyTransactionId = async () => {
-    if (!result?.transactionId) return;
+    if (!result?.transactionId) {
+      return;
+    }
 
     try {
       await navigator.clipboard.writeText(
@@ -417,7 +525,9 @@ function Withdraw() {
   ======================================================= */
 
   const printReceipt = () => {
-    if (!result) return;
+    if (!result) {
+      return;
+    }
 
     const receiptWindow = window.open(
       "",
@@ -430,6 +540,7 @@ function Withdraw() {
         "error",
         "Please allow pop-ups to print the receipt."
       );
+
       return;
     }
 
@@ -493,6 +604,7 @@ function Withdraw() {
       </head>
 
       <body>
+
         <div class="header">
           <h1>Bank Management System</h1>
           <div>Withdrawal Transaction Receipt</div>
@@ -503,35 +615,63 @@ function Withdraw() {
         </div>
 
         <div class="amount">
-          ₹${Number(result.amount).toLocaleString("en-IN", {
-            minimumFractionDigits: 2,
-          })}
+          ₹${Number(result.amount).toLocaleString(
+            "en-IN",
+            {
+              minimumFractionDigits: 2,
+            }
+          )}
         </div>
 
         <div class="row">
-          <span class="label">Transaction ID</span>
-          <span class="value">${result.transactionId}</span>
-        </div>
+          <span class="label">
+            Transaction ID
+          </span>
 
-        <div class="row">
-          <span class="label">Account ID</span>
-          <span class="value">${result.accountId}</span>
-        </div>
-
-        <div class="row">
-          <span class="label">Transaction Type</span>
-          <span class="value">Withdrawal</span>
-        </div>
-
-        <div class="row">
-          <span class="label">Status</span>
-          <span class="value">${result.status}</span>
-        </div>
-
-        <div class="row">
-          <span class="label">Date</span>
           <span class="value">
-            ${new Date(result.timestamp).toLocaleString("en-IN")}
+            ${result.transactionId}
+          </span>
+        </div>
+
+        <div class="row">
+          <span class="label">
+            Account ID
+          </span>
+
+          <span class="value">
+            ${result.accountId}
+          </span>
+        </div>
+
+        <div class="row">
+          <span class="label">
+            Transaction Type
+          </span>
+
+          <span class="value">
+            Withdrawal
+          </span>
+        </div>
+
+        <div class="row">
+          <span class="label">
+            Status
+          </span>
+
+          <span class="value">
+            ${result.status}
+          </span>
+        </div>
+
+        <div class="row">
+          <span class="label">
+            Date
+          </span>
+
+          <span class="value">
+            ${new Date(
+              result.timestamp
+            ).toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -539,9 +679,14 @@ function Withdraw() {
           result.balance !== null
             ? `
               <div class="row">
-                <span class="label">Available Balance</span>
+                <span class="label">
+                  Available Balance
+                </span>
+
                 <span class="value">
-                  ₹${Number(result.balance).toLocaleString("en-IN", {
+                  ₹${Number(
+                    result.balance
+                  ).toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
                   })}
                 </span>
@@ -559,6 +704,7 @@ function Withdraw() {
             window.print();
           };
         </script>
+
       </body>
       </html>
     `);
@@ -572,6 +718,7 @@ function Withdraw() {
 
   return (
     <Box sx={pageStyles}>
+
       {/* =================================================
           HEADER
       ================================================= */}
@@ -605,7 +752,8 @@ function Withdraw() {
                 borderRadius: 2.5,
                 bgcolor: "#fff1f2",
                 color: "#dc2626",
-                border: "1px solid #fecdd3",
+                border:
+                  "1px solid #fecdd3",
               }}
             >
               <TrendingDown />
@@ -634,7 +782,8 @@ function Withdraw() {
                   mt: 0.4,
                 }}
               >
-                Securely withdraw funds from your bank account
+                Securely withdraw funds from your bank
+                account
               </Typography>
             </Box>
           </Stack>
@@ -666,11 +815,13 @@ function Withdraw() {
       ================================================= */}
 
       <Box sx={mainGridStyles}>
+
         {/* =================================================
             FORM
         ================================================= */}
 
         <Card sx={mainCardStyles}>
+
           <Box
             sx={{
               px: {
@@ -678,14 +829,16 @@ function Withdraw() {
                 sm: 3,
               },
               py: 2.5,
-              borderBottom: "1px solid #eaecf0",
+              borderBottom:
+                "1px solid #eaecf0",
               bgcolor: "#fff",
             }}
           >
             <Stack
               direction="row"
               sx={{
-                justifyContent: "space-between",
+                justifyContent:
+                  "space-between",
                 alignItems: "center",
                 gap: 2,
               }}
@@ -708,7 +861,8 @@ function Withdraw() {
                     fontSize: ".82rem",
                   }}
                 >
-                  Complete the details below to initiate a withdrawal
+                  Complete the details below to initiate a
+                  withdrawal
                 </Typography>
               </Box>
 
@@ -723,7 +877,8 @@ function Withdraw() {
                   fontSize: ".65rem",
                   fontWeight: 800,
                   bgcolor: "#f9fafb",
-                  border: "1px solid #eaecf0",
+                  border:
+                    "1px solid #eaecf0",
                 }}
               />
             </Stack>
@@ -738,6 +893,7 @@ function Withdraw() {
               },
             }}
           >
+
             {/* ACCOUNT */}
 
             <Box sx={{ mb: 4 }}>
@@ -762,11 +918,16 @@ function Withdraw() {
                   fullWidth
                   label="Account ID"
                   value={accountId}
-                  onChange={handleAccountChange}
+                  onChange={
+                    handleAccountChange
+                  }
                   placeholder="Enter account ID"
-                  error={Boolean(errors.accountId)}
+                  error={Boolean(
+                    errors.accountId
+                  )}
                   helperText={
-                    errors.accountId || "Example: 10001"
+                    errors.accountId ||
+                    "Example: 10001"
                   }
                   disabled={loading}
                   slotProps={{
@@ -777,7 +938,10 @@ function Withdraw() {
                       startAdornment: (
                         <InputAdornment position="start">
                           <AccountBalance
-                            sx={{ color: "#98a2b3" }}
+                            sx={{
+                              color:
+                                "#98a2b3",
+                            }}
                           />
                         </InputAdornment>
                       ),
@@ -788,7 +952,9 @@ function Withdraw() {
 
                 <Button
                   variant="outlined"
-                  onClick={handleVerifyAccount}
+                  onClick={
+                    handleVerifyAccount
+                  }
                   disabled={
                     verifying ||
                     loading ||
@@ -798,18 +964,23 @@ function Withdraw() {
                     minWidth: 125,
                     height: 56,
                     borderRadius: 2,
-                    textTransform: "none",
+                    textTransform:
+                      "none",
                     fontWeight: 750,
-                    borderColor: "#d0d5dd",
+                    borderColor:
+                      "#d0d5dd",
                   }}
                 >
                   {verifying ? (
-                    <CircularProgress size={20} />
+                    <CircularProgress
+                      size={20}
+                    />
                   ) : accountVerified ? (
                     <Stack
                       direction="row"
                       sx={{
-                        alignItems: "center",
+                        alignItems:
+                          "center",
                         gap: 0.7,
                       }}
                     >
@@ -827,7 +998,9 @@ function Withdraw() {
                 </Button>
               </Box>
 
-              <Collapse in={accountVerified}>
+              <Collapse
+                in={accountVerified}
+              >
                 <Paper
                   variant="outlined"
                   sx={{
@@ -835,13 +1008,15 @@ function Withdraw() {
                     p: 2,
                     borderRadius: 2.5,
                     bgcolor: "#f6fef9",
-                    borderColor: "#abefc6",
+                    borderColor:
+                      "#abefc6",
                   }}
                 >
                   <Stack
                     direction="row"
                     sx={{
-                      alignItems: "center",
+                      alignItems:
+                        "center",
                       gap: 1.5,
                     }}
                   >
@@ -849,18 +1024,23 @@ function Withdraw() {
                       sx={{
                         width: 42,
                         height: 42,
-                        bgcolor: "#dcfae6",
-                        color: "#039855",
+                        bgcolor:
+                          "#dcfae6",
+                        color:
+                          "#039855",
                       }}
                     >
                       <CheckCircle />
                     </Avatar>
 
-                    <Box sx={{ flex: 1 }}>
+                    <Box
+                      sx={{ flex: 1 }}
+                    >
                       <Typography
                         sx={{
                           fontWeight: 800,
-                          color: "#027a48",
+                          color:
+                            "#027a48",
                         }}
                       >
                         Account Ready
@@ -868,10 +1048,17 @@ function Withdraw() {
 
                       <Typography
                         variant="caption"
-                        sx={{ color: "#475467" }}
+                        sx={{
+                          color:
+                            "#475467",
+                        }}
                       >
-                        Account ID {accountInfo?.accountNumber} is
-                        ready for the withdrawal request.
+                        Account ID{" "}
+                        {
+                          accountInfo?.accountNumber
+                        }{" "}
+                        is ready for the
+                        withdrawal request.
                       </Typography>
                     </Box>
 
@@ -880,8 +1067,10 @@ function Withdraw() {
                       label="ACTIVE"
                       sx={{
                         fontWeight: 800,
-                        bgcolor: "#dcfae6",
-                        color: "#027a48",
+                        bgcolor:
+                          "#dcfae6",
+                        color:
+                          "#027a48",
                       }}
                     />
                   </Stack>
@@ -905,9 +1094,13 @@ function Withdraw() {
                   fullWidth
                   label="Amount"
                   value={amount}
-                  onChange={handleAmountChange}
+                  onChange={
+                    handleAmountChange
+                  }
                   placeholder="0.00"
-                  error={Boolean(errors.amount)}
+                  error={Boolean(
+                    errors.amount
+                  )}
                   helperText={
                     errors.amount ||
                     `Daily withdrawal limit: ${formatCurrency(
@@ -917,7 +1110,8 @@ function Withdraw() {
                   disabled={loading}
                   slotProps={{
                     htmlInput: {
-                      inputMode: "decimal",
+                      inputMode:
+                        "decimal",
                       min: 1,
                     },
                     input: {
@@ -926,8 +1120,10 @@ function Withdraw() {
                           <Typography
                             sx={{
                               fontWeight: 850,
-                              fontSize: "1.15rem",
-                              color: "#344054",
+                              fontSize:
+                                "1.15rem",
+                              color:
+                                "#344054",
                             }}
                           >
                             ₹
@@ -938,13 +1134,14 @@ function Withdraw() {
                   }}
                   sx={{
                     ...inputStyles,
-                    "& .MuiInputBase-input": {
-                      fontSize: {
-                        xs: "1.15rem",
-                        sm: "1.3rem",
+                    "& .MuiInputBase-input":
+                      {
+                        fontSize: {
+                          xs: "1.15rem",
+                          sm: "1.3rem",
+                        },
+                        fontWeight: 800,
                       },
-                      fontWeight: 800,
-                    },
                   }}
                 />
 
@@ -954,8 +1151,10 @@ function Withdraw() {
                   <Stack
                     direction="row"
                     sx={{
-                      justifyContent: "space-between",
-                      alignItems: "center",
+                      justifyContent:
+                        "space-between",
+                      alignItems:
+                        "center",
                       mb: 0.7,
                     }}
                   >
@@ -963,7 +1162,8 @@ function Withdraw() {
                       variant="caption"
                       sx={{
                         fontWeight: 700,
-                        color: "#667085",
+                        color:
+                          "#667085",
                       }}
                     >
                       Withdrawal limit usage
@@ -974,29 +1174,39 @@ function Withdraw() {
                       sx={{
                         fontWeight: 800,
                         color:
-                          amountProgress >= 90
+                          amountProgress >=
+                          90
                             ? "#dc2626"
                             : "#344054",
                       }}
                     >
-                      {amountProgress.toFixed(0)}%
+                      {amountProgress.toFixed(
+                        0
+                      )}
+                      %
                     </Typography>
                   </Stack>
 
                   <LinearProgress
                     variant="determinate"
-                    value={amountProgress}
+                    value={
+                      amountProgress
+                    }
                     sx={{
                       height: 7,
                       borderRadius: 10,
-                      bgcolor: "#eaecf0",
-                      "& .MuiLinearProgress-bar": {
-                        borderRadius: 10,
-                        bgcolor:
-                          amountProgress >= 90
-                            ? "#dc2626"
-                            : "#1570ef",
-                      },
+                      bgcolor:
+                        "#eaecf0",
+                      "& .MuiLinearProgress-bar":
+                        {
+                          borderRadius:
+                            10,
+                          bgcolor:
+                            amountProgress >=
+                            90
+                              ? "#dc2626"
+                              : "#1570ef",
+                        },
                     }}
                   />
                 </Box>
@@ -1007,11 +1217,14 @@ function Withdraw() {
                   <Typography
                     variant="caption"
                     sx={{
-                      display: "block",
+                      display:
+                        "block",
                       mb: 1.2,
                       fontWeight: 800,
-                      color: "#667085",
-                      letterSpacing: ".04em",
+                      color:
+                        "#667085",
+                      letterSpacing:
+                        ".04em",
                     }}
                   >
                     QUICK SELECT
@@ -1020,7 +1233,8 @@ function Withdraw() {
                   <Stack
                     direction="row"
                     sx={{
-                      flexWrap: "wrap",
+                      flexWrap:
+                        "wrap",
                       gap: 1,
                     }}
                   >
@@ -1033,7 +1247,8 @@ function Withdraw() {
                       25000,
                     ].map((value) => {
                       const selected =
-                        numericAmount === value;
+                        numericAmount ===
+                        value;
 
                       return (
                         <Button
@@ -1044,7 +1259,9 @@ function Withdraw() {
                               : "outlined"
                           }
                           onClick={() =>
-                            handleQuickAmount(value)
+                            handleQuickAmount(
+                              value
+                            )
                           }
                           disabled={loading}
                           sx={{
@@ -1053,20 +1270,27 @@ function Withdraw() {
                               sm: 88,
                             },
                             borderRadius: 2,
-                            textTransform: "none",
+                            textTransform:
+                              "none",
                             fontWeight: 750,
-                            borderColor: selected
-                              ? "#1570ef"
-                              : "#d0d5dd",
-                            bgcolor: selected
-                              ? "#1570ef"
-                              : "#fff",
-                            color: selected
-                              ? "#fff"
-                              : "#344054",
+                            borderColor:
+                              selected
+                                ? "#1570ef"
+                                : "#d0d5dd",
+                            bgcolor:
+                              selected
+                                ? "#1570ef"
+                                : "#fff",
+                            color:
+                              selected
+                                ? "#fff"
+                                : "#344054",
                           }}
                         >
-                          ₹{formatNumber(value)}
+                          ₹
+                          {formatNumber(
+                            value
+                          )}
                         </Button>
                       );
                     })}
@@ -1085,7 +1309,8 @@ function Withdraw() {
                 borderRadius: 2.5,
                 overflow: "hidden",
                 bgcolor: "#fcfcfd",
-                borderColor: "#eaecf0",
+                borderColor:
+                  "#eaecf0",
               }}
             >
               <Box
@@ -1093,7 +1318,8 @@ function Withdraw() {
                   px: 2,
                   py: 1.5,
                   bgcolor: "#f9fafb",
-                  borderBottom: "1px solid #eaecf0",
+                  borderBottom:
+                    "1px solid #eaecf0",
                 }}
               >
                 <Typography
@@ -1127,9 +1353,12 @@ function Withdraw() {
                         height: 25,
                         fontWeight: 800,
                         fontSize: ".65rem",
-                        bgcolor: "#fff7ed",
-                        color: "#c2410c",
-                        border: "1px solid #fed7aa",
+                        bgcolor:
+                          "#fff7ed",
+                        color:
+                          "#c2410c",
+                        border:
+                          "1px solid #fed7aa",
                       }}
                     />
                   }
@@ -1140,19 +1369,24 @@ function Withdraw() {
                   value="Instant"
                 />
 
-                <Divider sx={{ my: 1.5 }} />
+                <Divider
+                  sx={{ my: 1.5 }}
+                />
 
                 <Stack
                   direction="row"
                   sx={{
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    justifyContent:
+                      "space-between",
+                    alignItems:
+                      "center",
                   }}
                 >
                   <Typography
                     sx={{
                       fontWeight: 800,
-                      color: "#344054",
+                      color:
+                        "#344054",
                     }}
                   >
                     Total withdrawal
@@ -1161,11 +1395,15 @@ function Withdraw() {
                   <Typography
                     sx={{
                       fontWeight: 900,
-                      fontSize: "1.25rem",
-                      color: "#dc2626",
+                      fontSize:
+                        "1.25rem",
+                      color:
+                        "#dc2626",
                     }}
                   >
-                    {formatCurrency(numericAmount)}
+                    {formatCurrency(
+                      numericAmount
+                    )}
                   </Typography>
                 </Stack>
               </Box>
@@ -1205,10 +1443,13 @@ function Withdraw() {
                   minHeight: 52,
                   flex: 1,
                   borderRadius: 2,
-                  textTransform: "none",
+                  textTransform:
+                    "none",
                   fontWeight: 750,
-                  borderColor: "#d0d5dd",
-                  color: "#344054",
+                  borderColor:
+                    "#d0d5dd",
+                  color:
+                    "#344054",
                 }}
               >
                 Clear Form
@@ -1223,18 +1464,23 @@ function Withdraw() {
                   !amount ||
                   !isAmountValid
                 }
-                startIcon={<ReceiptLong />}
+                startIcon={
+                  <ReceiptLong />
+                }
                 sx={{
                   minHeight: 52,
                   flex: 2,
                   borderRadius: 2,
-                  textTransform: "none",
+                  textTransform:
+                    "none",
                   fontWeight: 800,
-                  bgcolor: "#dc2626",
+                  bgcolor:
+                    "#dc2626",
                   boxShadow:
                     "0 5px 14px rgba(220,38,38,.2)",
                   "&:hover": {
-                    bgcolor: "#b91c1c",
+                    bgcolor:
+                      "#b91c1c",
                   },
                 }}
               >
@@ -1247,8 +1493,10 @@ function Withdraw() {
             <Stack
               direction="row"
               sx={{
-                alignItems: "center",
-                justifyContent: "center",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "center",
                 gap: 1,
                 mt: 2.5,
               }}
@@ -1262,10 +1510,12 @@ function Withdraw() {
 
               <Typography
                 variant="caption"
-                sx={{ color: "#98a2b3" }}
+                sx={{
+                  color: "#98a2b3",
+                }}
               >
-                Your transaction is protected by authenticated
-                API access
+                Your transaction is protected by
+                authenticated API access
               </Typography>
             </Stack>
           </CardContent>
@@ -1276,6 +1526,7 @@ function Withdraw() {
         ================================================= */}
 
         <Stack sx={{ gap: 2.5 }}>
+
           {/* SECURITY */}
 
           <Card sx={sidebarCardStyles}>
@@ -1283,7 +1534,8 @@ function Withdraw() {
               <Stack
                 direction="row"
                 sx={{
-                  alignItems: "center",
+                  alignItems:
+                    "center",
                   gap: 1.5,
                   mb: 2.5,
                 }}
@@ -1293,8 +1545,10 @@ function Withdraw() {
                     width: 44,
                     height: 44,
                     borderRadius: 2,
-                    bgcolor: "#eff8ff",
-                    color: "#1570ef",
+                    bgcolor:
+                      "#eff8ff",
+                    color:
+                      "#1570ef",
                   }}
                 >
                   <Security />
@@ -1304,7 +1558,8 @@ function Withdraw() {
                   <Typography
                     sx={{
                       fontWeight: 850,
-                      color: "#101828",
+                      color:
+                        "#101828",
                     }}
                   >
                     Security Center
@@ -1312,7 +1567,10 @@ function Withdraw() {
 
                   <Typography
                     variant="caption"
-                    sx={{ color: "#667085" }}
+                    sx={{
+                      color:
+                        "#667085",
+                    }}
                   >
                     Transaction protection
                   </Typography>
@@ -1321,7 +1579,9 @@ function Withdraw() {
 
               <Stack sx={{ gap: 2 }}>
                 <SecurityRow
-                  icon={<VerifiedUser />}
+                  icon={
+                    <VerifiedUser />
+                  }
                   title="Authenticated"
                   description="Request requires valid authentication."
                 />
@@ -1348,8 +1608,10 @@ function Withdraw() {
               <Stack
                 direction="row"
                 sx={{
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  justifyContent:
+                    "space-between",
+                  alignItems:
+                    "center",
                   mb: 2,
                 }}
               >
@@ -1357,7 +1619,8 @@ function Withdraw() {
                   <Typography
                     sx={{
                       fontWeight: 850,
-                      color: "#101828",
+                      color:
+                        "#101828",
                     }}
                   >
                     Withdrawal Limits
@@ -1365,7 +1628,10 @@ function Withdraw() {
 
                   <Typography
                     variant="caption"
-                    sx={{ color: "#667085" }}
+                    sx={{
+                      color:
+                        "#667085",
+                    }}
                   >
                     Account transaction controls
                   </Typography>
@@ -1375,7 +1641,10 @@ function Withdraw() {
                   <IconButton
                     size="small"
                     onClick={() =>
-                      setShowLimits((previous) => !previous)
+                      setShowLimits(
+                        (previous) =>
+                          !previous
+                      )
                     }
                   >
                     <InfoOutlined fontSize="small" />
@@ -1386,12 +1655,16 @@ function Withdraw() {
               <Stack sx={{ gap: 1.7 }}>
                 <LimitRow
                   label="Daily limit"
-                  value={formatCurrency(dailyLimit)}
+                  value={formatCurrency(
+                    dailyLimit
+                  )}
                 />
 
                 <LimitRow
                   label="Minimum"
-                  value={formatCurrency(1)}
+                  value={formatCurrency(
+                    1
+                  )}
                 />
 
                 <LimitRow
@@ -1400,7 +1673,9 @@ function Withdraw() {
                 />
               </Stack>
 
-              <Collapse in={showLimits}>
+              <Collapse
+                in={showLimits}
+              >
                 <Alert
                   severity="info"
                   sx={{
@@ -1408,8 +1683,8 @@ function Withdraw() {
                     borderRadius: 2,
                   }}
                 >
-                  Actual transaction limits may also be
-                  enforced by the bank backend.
+                  Actual transaction limits may
+                  also be enforced by the bank backend.
                 </Alert>
               </Collapse>
             </CardContent>
@@ -1421,7 +1696,8 @@ function Withdraw() {
             sx={{
               borderRadius: 3,
               bgcolor: "#fffcf5",
-              border: "1px solid #fedf89",
+              border:
+                "1px solid #fedf89",
               boxShadow: "none",
             }}
           >
@@ -1429,7 +1705,8 @@ function Withdraw() {
               <Stack
                 direction="row"
                 sx={{
-                  alignItems: "flex-start",
+                  alignItems:
+                    "flex-start",
                   gap: 1.5,
                 }}
               >
@@ -1438,8 +1715,10 @@ function Withdraw() {
                     width: 40,
                     height: 40,
                     borderRadius: 2,
-                    bgcolor: "#fef0c7",
-                    color: "#dc6803",
+                    bgcolor:
+                      "#fef0c7",
+                    color:
+                      "#dc6803",
                   }}
                 >
                   <WarningAmber />
@@ -1449,7 +1728,8 @@ function Withdraw() {
                   <Typography
                     sx={{
                       fontWeight: 850,
-                      color: "#93370d",
+                      color:
+                        "#93370d",
                       mb: 0.7,
                     }}
                   >
@@ -1459,12 +1739,14 @@ function Withdraw() {
                   <Typography
                     variant="body2"
                     sx={{
-                      color: "#7a2e0e",
+                      color:
+                        "#7a2e0e",
                       lineHeight: 1.7,
                     }}
                   >
-                    Verify the account ID and amount carefully.
-                    A completed transaction may be recorded
+                    Verify the account ID and
+                    amount carefully. A completed
+                    transaction may be recorded
                     immediately.
                   </Typography>
                 </Box>
@@ -1472,14 +1754,18 @@ function Withdraw() {
             </CardContent>
           </Card>
 
-          {/* ACTIVITY */}
+          {/* =================================================
+              ACTIVITY / RECENT WITHDRAWALS
+          ================================================= */}
 
           <Card sx={sidebarCardStyles}>
             <CardContent sx={{ p: 2.5 }}>
+
               <Stack
                 direction="row"
                 sx={{
-                  alignItems: "center",
+                  alignItems:
+                    "center",
                   gap: 1.2,
                 }}
               >
@@ -1488,44 +1774,301 @@ function Withdraw() {
                     width: 40,
                     height: 40,
                     borderRadius: 2,
-                    bgcolor: "#f9f5ff",
-                    color: "#7f56d9",
+                    bgcolor:
+                      "#f9f5ff",
+                    color:
+                      "#7f56d9",
                   }}
                 >
                   <History />
                 </Avatar>
 
                 <Box sx={{ flex: 1 }}>
-                  <Typography sx={{ fontWeight: 850 }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 850,
+                      color:
+                        "#101828",
+                    }}
+                  >
                     Transaction History
                   </Typography>
 
                   <Typography
                     variant="caption"
-                    sx={{ color: "#667085" }}
+                    sx={{
+                      color:
+                        "#667085",
+                    }}
                   >
-                    Review completed withdrawals
+                    Your recent withdrawals
                   </Typography>
                 </Box>
 
-                <IconButton size="small" disabled>
-                  <MoreHoriz />
-                </IconButton>
+                <Tooltip title="Refresh history">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={
+                        loadRecentWithdrawals
+                      }
+                      disabled={
+                        historyLoading
+                      }
+                    >
+                      <History fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               </Stack>
+
+              <Box sx={{ mt: 2 }}>
+
+                {/* LOADING */}
+
+                {historyLoading ? (
+                  <Stack
+                    direction="row"
+                    sx={{
+                      alignItems:
+                        "center",
+                      justifyContent:
+                        "center",
+                      gap: 1,
+                      py: 2,
+                    }}
+                  >
+                    <CircularProgress
+                      size={20}
+                    />
+
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color:
+                          "#667085",
+                      }}
+                    >
+                      Loading withdrawals...
+                    </Typography>
+                  </Stack>
+
+                ) : recentWithdrawals.length ===
+                  0 ? (
+
+                  /* EMPTY */
+
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor:
+                        "#fcfcfd",
+                      borderColor:
+                        "#eaecf0",
+                      textAlign:
+                        "center",
+                    }}
+                  >
+                    <History
+                      sx={{
+                        fontSize: 30,
+                        color:
+                          "#98a2b3",
+                        mb: 0.5,
+                      }}
+                    />
+
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 750,
+                        color:
+                          "#475467",
+                      }}
+                    >
+                      No withdrawals yet
+                    </Typography>
+
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display:
+                          "block",
+                        mt: 0.4,
+                        color:
+                          "#98a2b3",
+                      }}
+                    >
+                      Your completed withdrawals
+                      will appear here.
+                    </Typography>
+                  </Paper>
+
+                ) : (
+
+                  /* TRANSACTIONS */
+
+                  <Stack sx={{ gap: 1 }}>
+                    {recentWithdrawals.map(
+                      (transaction) => {
+                        const transactionAmount =
+                          Number(
+                            transaction?.amount ||
+                              0
+                          );
+
+                        const timestamp =
+                          transaction?.timestamp ||
+                          transaction?.createdAt;
+
+                        return (
+                          <Paper
+                            key={
+                              transaction?.id
+                            }
+                            variant="outlined"
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2,
+                              borderColor:
+                                "#eaecf0",
+                              bgcolor:
+                                "#fcfcfd",
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              sx={{
+                                alignItems:
+                                  "center",
+                                gap: 1.2,
+                              }}
+                            >
+                              <Avatar
+                                sx={{
+                                  width: 34,
+                                  height: 34,
+                                  bgcolor:
+                                    "#fff1f2",
+                                  color:
+                                    "#dc2626",
+                                }}
+                              >
+                                <TrendingDown
+                                  sx={{
+                                    fontSize:
+                                      18,
+                                  }}
+                                />
+                              </Avatar>
+
+                              <Box
+                                sx={{
+                                  flex: 1,
+                                  minWidth: 0,
+                                }}
+                              >
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontWeight:
+                                      800,
+                                    color:
+                                      "#344054",
+                                  }}
+                                >
+                                  Withdrawal
+                                </Typography>
+
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display:
+                                      "block",
+                                    color:
+                                      "#98a2b3",
+                                    mt: 0.2,
+                                  }}
+                                >
+                                  {timestamp
+                                    ? new Date(
+                                        timestamp
+                                      ).toLocaleString(
+                                        "en-IN",
+                                        {
+                                          day: "2-digit",
+                                          month:
+                                            "short",
+                                          year:
+                                            "numeric",
+                                          hour:
+                                            "2-digit",
+                                          minute:
+                                            "2-digit",
+                                        }
+                                      )
+                                    : "Date unavailable"}
+                                </Typography>
+                              </Box>
+
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight:
+                                    900,
+                                  color:
+                                    "#dc2626",
+                                  whiteSpace:
+                                    "nowrap",
+                                }}
+                              >
+                                -
+                                {formatCurrency(
+                                  transactionAmount
+                                )}
+                              </Typography>
+                            </Stack>
+                          </Paper>
+                        );
+                      }
+                    )}
+                  </Stack>
+                )}
+              </Box>
+
+              {/* VIEW ALL */}
 
               <Button
                 fullWidth
                 variant="outlined"
-                disabled
+                onClick={() =>
+                  navigate(
+                    "/transactions"
+                  )
+                }
                 sx={{
                   mt: 2,
                   borderRadius: 2,
-                  textTransform: "none",
+                  textTransform:
+                    "none",
                   fontWeight: 750,
+                  borderColor:
+                    "#d0d5dd",
+                  color:
+                    "#344054",
+                  "&:hover": {
+                    borderColor:
+                      "#7f56d9",
+                    bgcolor:
+                      "#faf5ff",
+                  },
                 }}
               >
-                View Recent Withdrawals
+                View All Transactions
               </Button>
+
             </CardContent>
           </Card>
         </Stack>
@@ -1538,7 +2081,9 @@ function Withdraw() {
       <Dialog
         open={reviewOpen}
         onClose={() => {
-          if (!loading) setReviewOpen(false);
+          if (!loading) {
+            setReviewOpen(false);
+          }
         }}
         fullWidth
         maxWidth="sm"
@@ -1552,20 +2097,24 @@ function Withdraw() {
         <DialogTitle
           sx={{
             p: 3,
-            borderBottom: "1px solid #eaecf0",
+            borderBottom:
+              "1px solid #eaecf0",
           }}
         >
           <Stack
             direction="row"
             sx={{
-              alignItems: "center",
+              alignItems:
+                "center",
               gap: 1.5,
             }}
           >
             <Avatar
               sx={{
-                bgcolor: "#fff1f2",
-                color: "#dc2626",
+                bgcolor:
+                  "#fff1f2",
+                color:
+                  "#dc2626",
               }}
             >
               <ReceiptLong />
@@ -1575,7 +2124,8 @@ function Withdraw() {
               <Typography
                 sx={{
                   fontWeight: 850,
-                  fontSize: "1.15rem",
+                  fontSize:
+                    "1.15rem",
                 }}
               >
                 Review Withdrawal
@@ -1583,9 +2133,13 @@ function Withdraw() {
 
               <Typography
                 variant="caption"
-                sx={{ color: "#667085" }}
+                sx={{
+                  color:
+                    "#667085",
+                }}
               >
-                Verify the transaction before submitting
+                Verify the transaction before
+                submitting
               </Typography>
             </Box>
           </Stack>
@@ -1602,14 +2156,17 @@ function Withdraw() {
             <Box
               sx={{
                 p: 2.5,
-                textAlign: "center",
-                bgcolor: "#fff8f8",
+                textAlign:
+                  "center",
+                bgcolor:
+                  "#fff8f8",
               }}
             >
               <Typography
                 variant="caption"
                 sx={{
-                  color: "#667085",
+                  color:
+                    "#667085",
                   fontWeight: 700,
                 }}
               >
@@ -1619,12 +2176,16 @@ function Withdraw() {
               <Typography
                 sx={{
                   mt: 0.5,
-                  fontSize: "2rem",
+                  fontSize:
+                    "2rem",
                   fontWeight: 900,
-                  color: "#dc2626",
+                  color:
+                    "#dc2626",
                 }}
               >
-                {formatCurrency(numericAmount)}
+                {formatCurrency(
+                  numericAmount
+                )}
               </Typography>
             </Box>
 
@@ -1651,7 +2212,9 @@ function Withdraw() {
                     size="small"
                     label="READY"
                     color="success"
-                    sx={{ fontWeight: 800 }}
+                    sx={{
+                      fontWeight: 800,
+                    }}
                   />
                 }
               />
@@ -1666,23 +2229,27 @@ function Withdraw() {
               borderRadius: 2,
             }}
           >
-            Please verify the account and amount. This
-            operation will be sent to the banking server
-            immediately.
+            Please verify the account and amount.
+            This operation will be sent to the banking
+            server immediately.
           </Alert>
         </DialogContent>
 
         <DialogActions
           sx={{
             p: 2.5,
-            borderTop: "1px solid #eaecf0",
+            borderTop:
+              "1px solid #eaecf0",
           }}
         >
           <Button
-            onClick={() => setReviewOpen(false)}
+            onClick={() =>
+              setReviewOpen(false)
+            }
             sx={{
               borderRadius: 2,
-              textTransform: "none",
+              textTransform:
+                "none",
               fontWeight: 750,
             }}
           >
@@ -1705,11 +2272,14 @@ function Withdraw() {
             }
             sx={{
               borderRadius: 2,
-              textTransform: "none",
+              textTransform:
+                "none",
               fontWeight: 800,
-              bgcolor: "#dc2626",
+              bgcolor:
+                "#dc2626",
               "&:hover": {
-                bgcolor: "#b91c1c",
+                bgcolor:
+                  "#b91c1c",
               },
             }}
           >
@@ -1726,7 +2296,9 @@ function Withdraw() {
 
       <Dialog
         open={receiptOpen}
-        onClose={() => setReceiptOpen(false)}
+        onClose={() =>
+          setReceiptOpen(false)
+        }
         fullWidth
         maxWidth="sm"
         PaperProps={{
@@ -1738,7 +2310,8 @@ function Withdraw() {
         <DialogTitle
           sx={{
             p: 3,
-            textAlign: "center",
+            textAlign:
+              "center",
           }}
         >
           <Avatar
@@ -1747,17 +2320,24 @@ function Withdraw() {
               height: 64,
               mx: "auto",
               mb: 1.5,
-              bgcolor: "#dcfae6",
-              color: "#039855",
+              bgcolor:
+                "#dcfae6",
+              color:
+                "#039855",
             }}
           >
-            <CheckCircle sx={{ fontSize: 34 }} />
+            <CheckCircle
+              sx={{
+                fontSize: 34,
+              }}
+            />
           </Avatar>
 
           <Typography
             sx={{
               fontWeight: 900,
-              fontSize: "1.35rem",
+              fontSize:
+                "1.35rem",
             }}
           >
             Withdrawal Successful
@@ -1767,14 +2347,21 @@ function Withdraw() {
             variant="body2"
             sx={{
               mt: 0.5,
-              color: "#667085",
+              color:
+                "#667085",
             }}
           >
-            Your withdrawal has been processed successfully.
+            Your withdrawal has been processed
+            successfully.
           </Typography>
         </DialogTitle>
 
-        <DialogContent sx={{ px: 3, pb: 2 }}>
+        <DialogContent
+          sx={{
+            px: 3,
+            pb: 2,
+          }}
+        >
           {result && (
             <>
               <Paper
@@ -1782,15 +2369,19 @@ function Withdraw() {
                 sx={{
                   p: 2.5,
                   borderRadius: 2.5,
-                  bgcolor: "#f6fef9",
-                  borderColor: "#abefc6",
-                  textAlign: "center",
+                  bgcolor:
+                    "#f6fef9",
+                  borderColor:
+                    "#abefc6",
+                  textAlign:
+                    "center",
                 }}
               >
                 <Typography
                   variant="caption"
                   sx={{
-                    color: "#667085",
+                    color:
+                      "#667085",
                     fontWeight: 700,
                   }}
                 >
@@ -1799,13 +2390,17 @@ function Withdraw() {
 
                 <Typography
                   sx={{
-                    fontSize: "2rem",
+                    fontSize:
+                      "2rem",
                     fontWeight: 900,
-                    color: "#027a48",
+                    color:
+                      "#027a48",
                     mt: 0.3,
                   }}
                 >
-                  {formatCurrency(result.amount)}
+                  {formatCurrency(
+                    result.amount
+                  )}
                 </Typography>
               </Paper>
 
@@ -1816,24 +2411,34 @@ function Withdraw() {
                     <Stack
                       direction="row"
                       sx={{
-                        alignItems: "center",
+                        alignItems:
+                          "center",
                         gap: 0.5,
                       }}
                     >
                       <Typography
                         variant="body2"
-                        sx={{ fontWeight: 750 }}
+                        sx={{
+                          fontWeight: 750,
+                        }}
                       >
-                        {result.transactionId}
+                        {
+                          result.transactionId
+                        }
                       </Typography>
 
                       <Tooltip title="Copy">
                         <IconButton
                           size="small"
-                          onClick={copyTransactionId}
+                          onClick={
+                            copyTransactionId
+                          }
                         >
                           <ContentCopy
-                            sx={{ fontSize: 16 }}
+                            sx={{
+                              fontSize:
+                                16,
+                            }}
                           />
                         </IconButton>
                       </Tooltip>
@@ -1850,7 +2455,9 @@ function Withdraw() {
                   label="Date & Time"
                   value={new Date(
                     result.timestamp
-                  ).toLocaleString("en-IN")}
+                  ).toLocaleString(
+                    "en-IN"
+                  )}
                 />
 
                 <SummaryRow
@@ -1860,26 +2467,39 @@ function Withdraw() {
                       size="small"
                       label="COMPLETED"
                       color="success"
-                      icon={<CheckCircleOutline />}
-                      sx={{ fontWeight: 800 }}
+                      icon={
+                        <CheckCircle />
+                      }
+                      sx={{
+                        fontWeight: 800,
+                      }}
                     />
                   }
                 />
 
-                {result.balance !== null && (
+                {result.balance !==
+                  null && (
                   <>
-                    <Divider sx={{ my: 1.5 }} />
+                    <Divider
+                      sx={{
+                        my: 1.5,
+                      }}
+                    />
 
                     <SummaryRow
                       label="Available Balance"
                       value={
                         <Typography
                           sx={{
-                            fontWeight: 900,
-                            color: "#027a48",
+                            fontWeight:
+                              900,
+                            color:
+                              "#027a48",
                           }}
                         >
-                          {formatCurrency(result.balance)}
+                          {formatCurrency(
+                            result.balance
+                          )}
                         </Typography>
                       }
                     />
@@ -1898,12 +2518,17 @@ function Withdraw() {
         >
           <Button
             variant="outlined"
-            startIcon={<Download />}
-            onClick={printReceipt}
+            startIcon={
+              <Download />
+            }
+            onClick={
+              printReceipt
+            }
             sx={{
               flex: 1,
               borderRadius: 2,
-              textTransform: "none",
+              textTransform:
+                "none",
               fontWeight: 750,
             }}
           >
@@ -1912,11 +2537,14 @@ function Withdraw() {
 
           <Button
             variant="contained"
-            onClick={() => setReceiptOpen(false)}
+            onClick={() =>
+              setReceiptOpen(false)
+            }
             sx={{
               flex: 1,
               borderRadius: 2,
-              textTransform: "none",
+              textTransform:
+                "none",
               fontWeight: 800,
             }}
           >
@@ -1947,7 +2575,8 @@ function Withdraw() {
           severity={toast.type}
           variant="filled"
           icon={
-            toast.type === "success" ? (
+            toast.type ===
+            "success" ? (
               <CheckCircle />
             ) : (
               <ErrorIcon />
@@ -1988,7 +2617,8 @@ function SectionHeading({
     <Stack
       direction="row"
       sx={{
-        alignItems: "flex-start",
+        alignItems:
+          "flex-start",
         gap: 1.5,
       }}
     >
@@ -1998,11 +2628,15 @@ function SectionHeading({
           height: 32,
           flexShrink: 0,
           borderRadius: 1.5,
-          bgcolor: "#f2f4f7",
-          color: "#475467",
+          bgcolor:
+            "#f2f4f7",
+          color:
+            "#475467",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          alignItems:
+            "center",
+          justifyContent:
+            "center",
           fontSize: ".75rem",
           fontWeight: 900,
         }}
@@ -2014,7 +2648,8 @@ function SectionHeading({
         <Typography
           sx={{
             fontWeight: 850,
-            color: "#101828",
+            color:
+              "#101828",
           }}
         >
           {title}
@@ -2022,7 +2657,10 @@ function SectionHeading({
 
         <Typography
           variant="caption"
-          sx={{ color: "#667085" }}
+          sx={{
+            color:
+              "#667085",
+          }}
         >
           {description}
         </Typography>
@@ -2035,36 +2673,50 @@ function SectionHeading({
    SUMMARY ROW
 ========================================================= */
 
-function SummaryRow({ label, value }) {
+function SummaryRow({
+  label,
+  value,
+}) {
   return (
     <Stack
       direction="row"
       sx={{
-        justifyContent: "space-between",
-        alignItems: "center",
+        justifyContent:
+          "space-between",
+        alignItems:
+          "center",
         gap: 2,
         py: 0.8,
       }}
     >
       <Typography
         variant="body2"
-        sx={{ color: "#667085" }}
+        sx={{
+          color:
+            "#667085",
+        }}
       >
         {label}
       </Typography>
 
       <Box
         sx={{
-          textAlign: "right",
-          color: "#344054",
+          textAlign:
+            "right",
+          color:
+            "#344054",
           minWidth: 0,
         }}
       >
-        {typeof value === "string" ||
-        typeof value === "number" ? (
+        {typeof value ===
+          "string" ||
+        typeof value ===
+          "number" ? (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 750 }}
+            sx={{
+              fontWeight: 750,
+            }}
           >
             {value}
           </Typography>
@@ -2089,7 +2741,8 @@ function SecurityRow({
     <Stack
       direction="row"
       sx={{
-        alignItems: "flex-start",
+        alignItems:
+          "flex-start",
         gap: 1.2,
       }}
     >
@@ -2099,11 +2752,15 @@ function SecurityRow({
           height: 32,
           flexShrink: 0,
           borderRadius: 1.5,
-          bgcolor: "#eff8ff",
-          color: "#1570ef",
+          bgcolor:
+            "#eff8ff",
+          color:
+            "#1570ef",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          alignItems:
+            "center",
+          justifyContent:
+            "center",
         }}
       >
         {icon}
@@ -2114,7 +2771,8 @@ function SecurityRow({
           variant="body2"
           sx={{
             fontWeight: 800,
-            color: "#344054",
+            color:
+              "#344054",
           }}
         >
           {title}
@@ -2123,7 +2781,8 @@ function SecurityRow({
         <Typography
           variant="caption"
           sx={{
-            color: "#667085",
+            color:
+              "#667085",
             lineHeight: 1.5,
           }}
         >
@@ -2138,18 +2797,26 @@ function SecurityRow({
    LIMIT ROW
 ========================================================= */
 
-function LimitRow({ label, value }) {
+function LimitRow({
+  label,
+  value,
+}) {
   return (
     <Stack
       direction="row"
       sx={{
-        justifyContent: "space-between",
-        alignItems: "center",
+        justifyContent:
+          "space-between",
+        alignItems:
+          "center",
       }}
     >
       <Typography
         variant="body2"
-        sx={{ color: "#667085" }}
+        sx={{
+          color:
+            "#667085",
+        }}
       >
         {label}
       </Typography>
@@ -2158,7 +2825,8 @@ function LimitRow({ label, value }) {
         variant="body2"
         sx={{
           fontWeight: 800,
-          color: "#344054",
+          color:
+            "#344054",
         }}
       >
         {value}
@@ -2207,14 +2875,16 @@ const mainGridStyles = {
 const mainCardStyles = {
   borderRadius: 3,
   border: "1px solid #e4e7ec",
-  boxShadow: "0 10px 35px rgba(16,24,40,.06)",
+  boxShadow:
+    "0 10px 35px rgba(16,24,40,.06)",
   overflow: "hidden",
 };
 
 const sidebarCardStyles = {
   borderRadius: 3,
   border: "1px solid #e4e7ec",
-  boxShadow: "0 8px 25px rgba(16,24,40,.05)",
+  boxShadow:
+    "0 8px 25px rgba(16,24,40,.05)",
 };
 
 const protectedChipStyles = {
@@ -2222,8 +2892,10 @@ const protectedChipStyles = {
   borderRadius: 2,
   bgcolor: "#ecfdf3",
   color: "#027a48",
-  border: "1px solid #abefc6",
+  border:
+    "1px solid #abefc6",
   fontWeight: 750,
+
   "& .MuiChip-icon": {
     color: "#12b76a",
   },
@@ -2234,8 +2906,10 @@ const authenticatedChipStyles = {
   borderRadius: 2,
   bgcolor: "#eff8ff",
   color: "#175cd3",
-  border: "1px solid #b2ddff",
+  border:
+    "1px solid #b2ddff",
   fontWeight: 750,
+
   "& .MuiChip-icon": {
     color: "#2e90fa",
   },
@@ -2245,19 +2919,24 @@ const inputStyles = {
   "& .MuiOutlinedInput-root": {
     borderRadius: 2,
     bgcolor: "#fff",
-    transition: "all .18s ease",
+    transition:
+      "all .18s ease",
 
     "& fieldset": {
-      borderColor: "#d0d5dd",
+      borderColor:
+        "#d0d5dd",
     },
 
     "&:hover fieldset": {
-      borderColor: "#98a2b3",
+      borderColor:
+        "#98a2b3",
     },
 
     "&.Mui-focused fieldset": {
-      borderWidth: "1.5px",
-      borderColor: "#1570ef",
+      borderWidth:
+        "1.5px",
+      borderColor:
+        "#1570ef",
     },
   },
 
@@ -2266,9 +2945,11 @@ const inputStyles = {
     fontWeight: 500,
   },
 
-  "& .MuiInputLabel-root.Mui-focused": {
-    color: "#1570ef",
-  },
+  "& .MuiInputLabel-root.Mui-focused":
+    {
+      color:
+        "#1570ef",
+    },
 
   "& .MuiFormHelperText-root": {
     marginLeft: 0,
@@ -2277,3 +2958,4 @@ const inputStyles = {
 };
 
 export default Withdraw;
+

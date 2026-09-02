@@ -71,7 +71,9 @@ const formatDate = (value) => {
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
 
   return date.toLocaleString("en-IN", {
     dateStyle: "medium",
@@ -115,32 +117,49 @@ const getBalance = (account) =>
 ========================================================= */
 
 function Transfer() {
+  /* -------------------------------------------------------
+     ACCOUNT STATE
+  ------------------------------------------------------- */
+
   const [accounts, setAccounts] = useState([]);
 
   const [fromAccount, setFromAccount] = useState(null);
+
   const [toAccount, setToAccount] = useState(null);
 
+  const [toAccountNumber, setToAccountNumber] =
+    useState("");
+
   const [fromSearch, setFromSearch] = useState("");
-  const [toSearch, setToSearch] = useState("");
 
   const [amount, setAmount] = useState("");
 
-  const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const [processing, setProcessing] = useState(false);
+  /* -------------------------------------------------------
+     LOADING STATE
+  ------------------------------------------------------- */
+
+  const [loadingAccounts, setLoadingAccounts] =
+    useState(true);
+
+  const [loadingReceiver, setLoadingReceiver] =
+    useState(false);
+
+  const [processing, setProcessing] =
+    useState(false);
+
+  /* -------------------------------------------------------
+     UI STATE
+  ------------------------------------------------------- */
 
   const [activeStep, setActiveStep] = useState(0);
 
   const [showFromAccounts, setShowFromAccounts] =
     useState(false);
 
-  const [showToAccounts, setShowToAccounts] =
-    useState(false);
-
   const [errors, setErrors] = useState({});
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  const [successOpen, setSuccessOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] =
+    useState(false);
 
   const [result, setResult] = useState(null);
 
@@ -188,13 +207,15 @@ function Transfer() {
   }, []);
 
   /* =======================================================
-     FILTERED ACCOUNTS
+     FILTER SENDER ACCOUNTS
   ======================================================= */
 
   const filteredFromAccounts = useMemo(() => {
     const query = fromSearch.trim().toLowerCase();
 
-    if (!query) return accounts;
+    if (!query) {
+      return accounts;
+    }
 
     return accounts.filter((account) =>
       [
@@ -206,6 +227,7 @@ function Transfer() {
         account.customer?.name,
         account.customerName,
         account.accountType,
+        account.status,
       ].some((value) =>
         String(value || "")
           .toLowerCase()
@@ -214,77 +236,351 @@ function Transfer() {
     );
   }, [accounts, fromSearch]);
 
-  const filteredToAccounts = useMemo(() => {
-    const query = toSearch.trim().toLowerCase();
-
-    if (!query) return accounts;
-
-    return accounts.filter((account) =>
-      [
-        account.id,
-        account.accountNumber,
-        account.accountNo,
-        account.customerId,
-        account.customer?.id,
-        account.customer?.name,
-        account.customerName,
-        account.accountType,
-      ].some((value) =>
-        String(value || "")
-          .toLowerCase()
-          .includes(query)
-      )
-    );
-  }, [accounts, toSearch]);
-
   /* =======================================================
-     FORM VALIDATION
+     CAN SWAP
   ======================================================= */
 
-  const validateTransfer = () => {
-    const newErrors = {};
+  const canSwapAccounts =
+    Boolean(fromAccount && toAccount) &&
+    accounts.some(
+      (account) =>
+        Number(account.id) ===
+        Number(toAccount.id)
+    );
 
-    if (!fromAccount) {
-      newErrors.fromAccount =
-        "Please select the sender account.";
+  /* =======================================================
+     SELECT SENDER ACCOUNT
+  ======================================================= */
+
+  const handleFromAccount = (account) => {
+    setFromAccount(account);
+
+    setShowFromAccounts(false);
+
+    setFromSearch("");
+
+    if (
+      account &&
+      toAccount &&
+      Number(account.id) ===
+        Number(toAccount.id)
+    ) {
+      setToAccount(null);
+      setToAccountNumber("");
+
+      setErrors((current) => ({
+        ...current,
+        fromAccount: "",
+        toAccount:
+          "Sender and receiver accounts must be different.",
+      }));
+
+      return;
     }
 
-    if (!toAccount) {
-      newErrors.toAccount =
-        "Please select the receiver account.";
+    setErrors((current) => ({
+      ...current,
+      fromAccount: "",
+      toAccount: "",
+    }));
+  };
+
+  /* =======================================================
+     VERIFY RECEIVER
+     
+     IMPORTANT:
+     Receiver is verified by account number.
+
+     API:
+     GET /api/accounts/lookup?accountNumber=9876543210
+  ======================================================= */
+
+  const lookupReceiver = async () => {
+    const accountNumber =
+      toAccountNumber.trim();
+
+      console.log("========== RECEIVER ROOT DEBUG ==========");
+console.log("toAccountNumber:", toAccountNumber);
+console.log("trimmed:", toAccountNumber.trim());
+console.log("fromAccount:", fromAccount);
+console.log("toAccount:", toAccount);
+console.log("=========================================");
+    /* -----------------------------------------------------
+       VALIDATE EMPTY
+    ----------------------------------------------------- */
+
+    if (!accountNumber) {
+      setToAccount(null);
+
+      setErrors((current) => ({
+        ...current,
+        toAccount:
+          "Please enter receiver account number.",
+      }));
+
+      return;
     }
+
+    /* -----------------------------------------------------
+       VALIDATE 10 DIGITS
+    ----------------------------------------------------- */
+
+    if (!/^\d{10}$/.test(accountNumber)) {
+      setToAccount(null);
+
+      setErrors((current) => ({
+        ...current,
+        toAccount:
+          "Account number must be exactly 10 digits.",
+      }));
+
+      return;
+    }
+
+    /* -----------------------------------------------------
+       SAME ACCOUNT CHECK
+    ----------------------------------------------------- */
 
     if (
       fromAccount &&
-      toAccount &&
-      Number(fromAccount.id) === Number(toAccount.id)
+      accountNumber ===
+        String(
+          fromAccount.accountNumber ||
+            fromAccount.accountNo ||
+            ""
+        )
     ) {
-      newErrors.toAccount =
-        "Sender and receiver accounts must be different.";
+      setToAccount(null);
+
+      setErrors((current) => ({
+        ...current,
+        toAccount:
+          "Sender and receiver accounts must be different.",
+      }));
+
+      return;
     }
 
-    const numericAmount = Number(amount);
+    try {
+      setLoadingReceiver(true);
 
-    if (!amount) {
-      newErrors.amount =
-        "Please enter the transfer amount.";
-    } else if (!Number.isFinite(numericAmount)) {
-      newErrors.amount =
-        "Please enter a valid amount.";
-    } else if (numericAmount <= 0) {
-      newErrors.amount =
-        "Transfer amount must be greater than ₹0.";
-    } else if (
-      fromAccount &&
-      numericAmount > getBalance(fromAccount)
-    ) {
-      newErrors.amount =
-        "Insufficient balance in the sender account.";
+      setToAccount(null);
+
+      setErrors((current) => ({
+        ...current,
+        toAccount: "",
+      }));
+
+      console.log(
+        "========== RECEIVER LOOKUP =========="
+      );
+
+      console.log(
+        "Account Number:",
+        accountNumber
+      );
+
+      console.log(
+        "Request:",
+        `/accounts/lookup?accountNumber=${accountNumber}`
+      );
+
+      /* ---------------------------------------------------
+         API CALL
+      --------------------------------------------------- */
+
+      const response = await api.get(
+        "/accounts/lookup",
+        {
+          params: {
+            accountNumber: accountNumber,
+          },
+        }
+      );
+
+      console.log(
+        "Receiver API Response:",
+        response.data
+      );
+
+      const receiver = response.data;
+
+      /* ---------------------------------------------------
+         RESPONSE VALIDATION
+      --------------------------------------------------- */
+
+      if (!receiver) {
+        throw new Error(
+          "Receiver account not found."
+        );
+      }
+
+      /* ---------------------------------------------------
+         ACTIVE ACCOUNT CHECK
+      --------------------------------------------------- */
+
+      if (
+        receiver.status &&
+        receiver.status !== "ACTIVE"
+      ) {
+        setToAccount(null);
+
+        setErrors((current) => ({
+          ...current,
+          toAccount:
+            "Receiver account is not active.",
+        }));
+
+        return;
+      }
+
+      /* ---------------------------------------------------
+         SAME ID CHECK
+      --------------------------------------------------- */
+
+      if (
+        fromAccount &&
+        Number(fromAccount.id) ===
+          Number(receiver.id)
+      ) {
+        setToAccount(null);
+
+        setErrors((current) => ({
+          ...current,
+          toAccount:
+            "Sender and receiver accounts must be different.",
+        }));
+
+        return;
+      }
+
+      /* ---------------------------------------------------
+         SUCCESS
+      --------------------------------------------------- */
+
+      setToAccount(receiver);
+
+      setErrors((current) => ({
+        ...current,
+        toAccount: "",
+      }));
+
+      setNotification({
+        open: true,
+        type: "success",
+        message:
+          "Receiver account verified successfully.",
+      });
+
+      console.log(
+        "Receiver verified:",
+        receiver
+      );
+
+      console.log(
+        "======================================"
+      );
+    } catch (error) {
+      console.error(
+        "Receiver lookup failed:",
+        error
+      );
+
+      console.error(
+        "Response:",
+        error?.response?.data
+      );
+
+      setToAccount(null);
+
+      setErrors((current) => ({
+        ...current,
+        toAccount:
+          error?.response?.data?.message ||
+          "Receiver account not found.",
+      }));
+    } finally {
+      setLoadingReceiver(false);
+    }
+  };
+
+  /* =======================================================
+     CHANGE RECEIVER NUMBER
+     
+     ONLY NUMBERS
+     MAX 10 DIGITS
+  ======================================================= */
+
+  const handleReceiverNumberChange = (
+    value
+  ) => {
+    /* Only digits */
+    if (!/^\d*$/.test(value)) {
+      return;
     }
 
-    setErrors(newErrors);
+    /* Maximum 10 digits */
+    if (value.length > 10) {
+      return;
+    }
 
-    return Object.keys(newErrors).length === 0;
+    setToAccountNumber(value);
+
+    /* Changing number invalidates old verification */
+    if (toAccount) {
+      setToAccount(null);
+    }
+
+    if (errors.toAccount) {
+      setErrors((current) => ({
+        ...current,
+        toAccount: "",
+      }));
+    }
+  };
+
+  /* =======================================================
+     CLEAR RECEIVER
+  ======================================================= */
+
+  const clearReceiver = () => {
+    setToAccount(null);
+
+    setToAccountNumber("");
+
+    setErrors((current) => ({
+      ...current,
+      toAccount: "",
+    }));
+  };
+
+  /* =======================================================
+     SWAP ACCOUNTS
+  ======================================================= */
+
+  const swapAccounts = () => {
+    if (!canSwapAccounts) {
+      return;
+    }
+
+    const sender = fromAccount;
+    const receiver = toAccount;
+
+    setFromAccount(receiver);
+
+    setToAccount(sender);
+
+    setToAccountNumber(
+      sender?.accountNumber ||
+        sender?.accountNo ||
+        ""
+    );
+
+    setErrors((current) => ({
+      ...current,
+      fromAccount: "",
+      toAccount: "",
+    }));
   };
 
   /* =======================================================
@@ -310,41 +606,59 @@ function Transfer() {
   };
 
   /* =======================================================
-     SELECT ACCOUNT
+     VALIDATION
   ======================================================= */
 
-  const handleFromAccount = (account) => {
-    setFromAccount(account);
-    setShowFromAccounts(false);
-    setFromSearch("");
+  const validateTransfer = () => {
+    const newErrors = {};
 
-    setErrors((current) => ({
-      ...current,
-      fromAccount: "",
-    }));
-  };
+    if (!fromAccount) {
+      newErrors.fromAccount =
+        "Please select the sender account.";
+    }
 
-  const handleToAccount = (account) => {
-    setToAccount(account);
-    setShowToAccounts(false);
-    setToSearch("");
+    if (!toAccount) {
+      newErrors.toAccount =
+        "Please verify the receiver account.";
+    }
 
-    setErrors((current) => ({
-      ...current,
-      toAccount: "",
-    }));
-  };
+    if (
+      fromAccount &&
+      toAccount &&
+      Number(fromAccount.id) ===
+        Number(toAccount.id)
+    ) {
+      newErrors.toAccount =
+        "Sender and receiver accounts must be different.";
+    }
 
-  /* =======================================================
-     SWAP ACCOUNTS
-  ======================================================= */
+    const numericAmount = Number(amount);
 
-  const swapAccounts = () => {
-    const sender = fromAccount;
-    const receiver = toAccount;
+    if (!amount) {
+      newErrors.amount =
+        "Please enter the transfer amount.";
+    } else if (
+      !Number.isFinite(numericAmount)
+    ) {
+      newErrors.amount =
+        "Please enter a valid amount.";
+    } else if (numericAmount <= 0) {
+      newErrors.amount =
+        "Transfer amount must be greater than ₹0.";
+    } else if (
+      fromAccount &&
+      numericAmount >
+        getBalance(fromAccount)
+    ) {
+      newErrors.amount =
+        "Insufficient balance in the sender account.";
+    }
 
-    setFromAccount(receiver);
-    setToAccount(sender);
+    setErrors(newErrors);
+
+    return (
+      Object.keys(newErrors).length === 0
+    );
   };
 
   /* =======================================================
@@ -355,44 +669,51 @@ function Transfer() {
     setFromAccount(null);
     setToAccount(null);
     setFromSearch("");
-    setToSearch("");
+    setToAccountNumber("");
     setAmount("");
     setErrors({});
     setActiveStep(0);
+    setResult(null);
   };
 
   /* =======================================================
-     CONTINUE
+     NEXT STEP
   ======================================================= */
 
   const handleContinue = () => {
     if (activeStep === 0) {
-      if (!fromAccount || !toAccount) {
-        setErrors({
-          fromAccount: !fromAccount
-            ? "Select sender account."
-            : "",
-          toAccount: !toAccount
-            ? "Select receiver account."
-            : "",
-        });
+      const newErrors = {};
 
-        return;
+      if (!fromAccount) {
+        newErrors.fromAccount =
+          "Select sender account.";
+      }
+
+      if (!toAccount) {
+        newErrors.toAccount =
+          "Verify receiver account.";
       }
 
       if (
+        fromAccount &&
+        toAccount &&
         Number(fromAccount.id) ===
-        Number(toAccount.id)
+          Number(toAccount.id)
       ) {
-        setErrors({
-          toAccount:
-            "Sender and receiver accounts must be different.",
-        });
+        newErrors.toAccount =
+          "Sender and receiver accounts must be different.";
+      }
 
+      setErrors(newErrors);
+
+      if (
+        Object.keys(newErrors).length > 0
+      ) {
         return;
       }
 
       setActiveStep(1);
+
       return;
     }
 
@@ -402,10 +723,23 @@ function Transfer() {
       }
 
       setActiveStep(2);
+
       return;
     }
 
     setConfirmOpen(true);
+  };
+
+  /* =======================================================
+     BACK
+  ======================================================= */
+
+  const handleBack = () => {
+    if (activeStep > 0) {
+      setActiveStep(
+        (current) => current - 1
+      );
+    }
   };
 
   /* =======================================================
@@ -424,8 +758,12 @@ function Transfer() {
       const response = await api.post(
         "/accounts/transfer",
         {
-          fromAccountId: Number(fromAccount.id),
-          toAccountId: Number(toAccount.id),
+          fromAccountId: Number(
+            fromAccount.id
+          ),
+          toAccountId: Number(
+            toAccount.id
+          ),
           amount: Number(amount),
         }
       );
@@ -433,7 +771,6 @@ function Transfer() {
       setResult(response.data || null);
 
       setConfirmOpen(false);
-      setSuccessOpen(true);
 
       setNotification({
         open: true,
@@ -467,110 +804,74 @@ function Transfer() {
   };
 
   /* =======================================================
-     COPY
-  ======================================================= */
-
-  const copyText = async (text) => {
-    try {
-      await navigator.clipboard.writeText(
-        String(text)
-      );
-
-      setNotification({
-        open: true,
-        type: "success",
-        message: "Copied to clipboard.",
-      });
-    } catch {
-      setNotification({
-        open: true,
-        type: "error",
-        message: "Unable to copy.",
-      });
-    }
-  };
-
-  /* =======================================================
      CALCULATIONS
   ======================================================= */
 
-  const transferAmount = Number(amount || 0);
+  const transferAmount =
+    Number(amount || 0);
 
   const fee = 0;
 
-  const total = transferAmount + fee;
+  const total =
+    transferAmount + fee;
 
-  const remainingBalance = fromAccount
-    ? getBalance(fromAccount) - transferAmount
-    : 0;
+  const remainingBalance =
+    fromAccount
+      ? getBalance(fromAccount) -
+        transferAmount
+      : 0;
 
   const completionPercentage =
     activeStep === 0
       ? 33
       : activeStep === 1
       ? 66
-      : activeStep >= 2
-      ? 100
       : 100;
 
   /* =======================================================
-     PAGE
+     RENDER
   ======================================================= */
 
   return (
     <Box
       sx={{
         minHeight: "100vh",
-        background:
-          "linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)",
-        px: {
-          xs: 1.5,
-          sm: 2.5,
-          md: 4,
-        },
-        py: {
-          xs: 2,
-          sm: 3,
-          md: 4,
-        },
+        bgcolor: "#f8fafc",
+        p: { xs: 2, md: 3 },
       }}
     >
+      {/* HEADER */}
+
       <Box
         sx={{
-          maxWidth: 1380,
+          maxWidth: 1400,
           mx: "auto",
+          mb: 3,
         }}
       >
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
         <Stack
           direction={{
             xs: "column",
-            md: "row",
+            sm: "row",
           }}
           justifyContent="space-between"
           alignItems={{
             xs: "flex-start",
-            md: "center",
+            sm: "center",
           }}
           spacing={2}
-          sx={{ mb: 3 }}
         >
           <Stack
             direction="row"
-            spacing={1.8}
+            spacing={2}
             alignItems="center"
           >
             <Avatar
               sx={{
-                width: 58,
-                height: 58,
+                width: 52,
+                height: 52,
                 borderRadius: 2.5,
-                bgcolor: "primary.main",
-                boxShadow:
-                  "0 10px 25px rgba(25,118,210,.22)",
+                bgcolor: "#0f172a",
               }}
             >
               <SwapHoriz />
@@ -578,180 +879,127 @@ function Transfer() {
 
             <Box>
               <Typography
-                variant="h4"
+                variant="h5"
                 fontWeight={900}
-                sx={{
-                  letterSpacing: "-.045em",
-                  color: "#0f172a",
-                  fontSize: {
-                    xs: "1.65rem",
-                    sm: "2rem",
-                    md: "2.3rem",
-                  },
-                }}
+                color="#0f172a"
               >
                 Transfer Money
               </Typography>
 
               <Typography
+                variant="body2"
                 color="text.secondary"
-                sx={{ mt: 0.3 }}
               >
-                Securely transfer funds between
-                your bank accounts
+                Securely transfer funds to a
+                verified bank account
               </Typography>
             </Box>
           </Stack>
 
-          <Stack
-            direction="row"
-            spacing={1}
-          >
-            <Tooltip title="Refresh accounts">
-              <span>
-                <IconButton
-                  onClick={loadAccounts}
-                  disabled={loadingAccounts}
-                  sx={{
-                    bgcolor: "#fff",
-                    border:
-                      "1px solid #e2e8f0",
-                    boxShadow:
-                      "0 2px 8px rgba(15,23,42,.04)",
-                  }}
-                >
-                  <Refresh
-                    sx={{
-                      animation:
-                        loadingAccounts
-                          ? "spin 1s linear infinite"
-                          : "none",
-                      "@keyframes spin": {
-                        from: {
-                          transform:
-                            "rotate(0deg)",
-                        },
-                        to: {
-                          transform:
-                            "rotate(360deg)",
-                        },
-                      },
-                    }}
-                  />
-                </IconButton>
-              </span>
-            </Tooltip>
-
-            <Chip
-              icon={<VerifiedUser />}
-              label="Secure Banking"
-              color="success"
-              variant="outlined"
-              sx={{
-                height: 42,
-                px: 0.5,
-                fontWeight: 800,
-                bgcolor: "#f0fdf4",
-              }}
-            />
-          </Stack>
+          <Chip
+            icon={<Security />}
+            label="Secure Banking"
+            color="success"
+            variant="outlined"
+            sx={{
+              fontWeight: 800,
+              borderRadius: 2,
+            }}
+          />
         </Stack>
+      </Box>
 
-        {/* =================================================
-            PROGRESS
-        ================================================= */}
+      {/* MAIN */}
+
+      <Box
+        sx={{
+          maxWidth: 1400,
+          mx: "auto",
+        }}
+      >
+        {/* PROGRESS */}
 
         <Card
           elevation={0}
           sx={{
-            borderRadius: 3,
+            mb: 3,
             border:
               "1px solid #e2e8f0",
-            mb: 3,
-            overflow: "hidden",
+            borderRadius: 3,
           }}
         >
-          <Box sx={{ px: 3, pt: 2.5 }}>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 1.5 }}
-            >
-              <Box>
+          <CardContent sx={{ p: 3 }}>
+            <Stack spacing={2}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
                 <Typography
-                  fontWeight={800}
+                  fontWeight={900}
                   color="#0f172a"
                 >
-                  Transfer workflow
+                  Transfer Progress
                 </Typography>
 
                 <Typography
-                  variant="caption"
+                  variant="body2"
                   color="text.secondary"
+                  fontWeight={700}
                 >
-                  Complete each step to securely
-                  transfer funds
+                  {completionPercentage}%
                 </Typography>
-              </Box>
+              </Stack>
 
-              <Typography
-                variant="caption"
-                fontWeight={800}
-                color="primary.main"
+              <LinearProgress
+                variant="determinate"
+                value={
+                  completionPercentage
+                }
+                sx={{
+                  height: 7,
+                  borderRadius: 5,
+                }}
+              />
+
+              <Stepper
+                activeStep={
+                  activeStep >= 3
+                    ? 2
+                    : activeStep
+                }
               >
-                {completionPercentage}%
-              </Typography>
-            </Stack>
-
-            <LinearProgress
-              variant="determinate"
-              value={completionPercentage}
-              sx={{
-                height: 5,
-                borderRadius: 10,
-                mb: 2.5,
-              }}
-            />
-
-            <Stepper
-              activeStep={
-                activeStep > 2 ? 2 : activeStep
-              }
-              alternativeLabel
-              sx={{
-                pb: 2,
-                "& .MuiStepLabel-label": {
-                  fontWeight: 700,
-                  fontSize: ".78rem",
-                },
-              }}
-            >
-              {[
-                "Select Accounts",
-                "Enter Amount",
-                "Review & Confirm",
-              ].map((label) => (
-                <Step key={label}>
-                  <StepLabel>{label}</StepLabel>
+                <Step>
+                  <StepLabel>
+                    Select Accounts
+                  </StepLabel>
                 </Step>
-              ))}
-            </Stepper>
-          </Box>
+
+                <Step>
+                  <StepLabel>
+                    Enter Amount
+                  </StepLabel>
+                </Step>
+
+                <Step>
+                  <StepLabel>
+                    Review & Confirm
+                  </StepLabel>
+                </Step>
+              </Stepper>
+            </Stack>
+          </CardContent>
         </Card>
 
-        {/* =================================================
-            SUCCESS STATE
-        ================================================= */}
+        {/* SUCCESS */}
 
         {activeStep === 3 ? (
           <SuccessTransfer
+            result={result}
             fromAccount={fromAccount}
             toAccount={toAccount}
-            amount={amount}
-            result={result}
-            onNewTransfer={resetTransfer}
-            onCopy={copyText}
+            amount={transferAmount}
+            onReset={resetTransfer}
           />
         ) : (
           <Box
@@ -759,112 +1007,61 @@ function Transfer() {
               display: "grid",
               gridTemplateColumns: {
                 xs: "1fr",
-                lg: "minmax(0, 1.7fr) minmax(330px,.8fr)",
+                lg: "minmax(0, 1fr) 360px",
               },
               gap: 3,
               alignItems: "start",
             }}
           >
-            {/* =============================================
-                MAIN WORKSPACE
-            ============================================= */}
+            {/* WORKSPACE */}
 
             <Card
               elevation={0}
               sx={{
-                borderRadius: 3,
                 border:
                   "1px solid #e2e8f0",
-                boxShadow:
-                  "0 8px 30px rgba(15,23,42,.055)",
+                borderRadius: 3,
               }}
             >
-              {/* Card Header */}
-
-              <Box
-                sx={{
-                  px: {
-                    xs: 2,
-                    sm: 3,
-                  },
-                  py: 2.5,
-                  borderBottom:
-                    "1px solid #e2e8f0",
-                  background:
-                    "linear-gradient(135deg,#fff,#f8fafc)",
-                }}
-              >
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                >
-                  <Box>
-                    <Typography
-                      variant="h6"
-                      fontWeight={900}
-                    >
-                      {activeStep === 0
-                        ? "Select Accounts"
-                        : activeStep === 1
-                        ? "Enter Transfer Amount"
-                        : "Review Transfer"}
-                    </Typography>
-
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mt: .4 }}
-                    >
-                      {activeStep === 0
-                        ? "Choose the source and destination accounts."
-                        : activeStep === 1
-                        ? "Enter the amount you want to transfer."
-                        : "Review all details before submitting."}
-                    </Typography>
-                  </Box>
-
-                  <Avatar
-                    sx={{
-                      width: 42,
-                      height: 42,
-                      bgcolor: "#eff6ff",
-                      color:
-                        "primary.main",
-                    }}
-                  >
-                    {activeStep === 0 ? (
-                      <AccountBalance />
-                    ) : activeStep === 1 ? (
-                      <AccountBalanceWallet />
-                    ) : (
-                      <Check />
-                    )}
-                  </Avatar>
-                </Stack>
-              </Box>
-
               <CardContent
                 sx={{
                   p: {
                     xs: 2,
-                    sm: 3,
                     md: 4,
                   },
                 }}
               >
-                {/* =========================================
-                    STEP 1
-                ========================================= */}
+                {/* STEP 0 */}
 
                 {activeStep === 0 && (
                   <Stack spacing={3}>
+                    <Box>
+                      <Typography
+                        variant="h6"
+                        fontWeight={900}
+                        color="#0f172a"
+                      >
+                        Select Transfer Accounts
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        Select your source account
+                        and verify the destination
+                        account.
+                      </Typography>
+                    </Box>
+
                     <AccountSelector
                       title="From Account"
                       subtitle="Source account"
                       account={fromAccount}
                       search={fromSearch}
-                      setSearch={setFromSearch}
+                      setSearch={
+                        setFromSearch
+                      }
                       accounts={
                         filteredFromAccounts
                       }
@@ -885,176 +1082,166 @@ function Transfer() {
                     <Box
                       sx={{
                         display: "flex",
-                        justifyContent:
-                          "center",
-                        position:
-                          "relative",
-                        height: {
-                          xs: 20,
-                          sm: 30,
-                        },
+                        alignItems: "center",
+                        gap: 2,
                       }}
                     >
                       <IconButton
-                        onClick={swapAccounts}
+                        onClick={
+                          swapAccounts
+                        }
                         disabled={
-                          !fromAccount &&
-                          !toAccount
+                          !canSwapAccounts ||
+                          processing
                         }
                         sx={{
-                          position:
-                            "absolute",
-                          zIndex: 2,
-                          top: "50%",
-                          transform:
-                            "translateY(-50%)",
-                          bgcolor: "#fff",
                           border:
-                            "1px solid #dbe2ea",
-                          boxShadow:
-                            "0 4px 15px rgba(15,23,42,.08)",
-                          "&:hover": {
-                            bgcolor:
-                              "#eff6ff",
-                          },
+                            "1px solid #cbd5e1",
                         }}
                       >
-                        <SwapHoriz
-                          color="primary"
-                        />
+                        <SwapHoriz />
                       </IconButton>
 
-                      <Divider
-                        sx={{
-                          width: "100%",
-                          position:
-                            "absolute",
-                          top: "50%",
-                        }}
-                      />
+                      <Divider sx={{ flex: 1 }} />
                     </Box>
 
-                    <AccountSelector
-                      title="To Account"
-                      subtitle="Destination account"
+                    <ReceiverSelector
                       account={toAccount}
-                      search={toSearch}
-                      setSearch={setToSearch}
-                      accounts={
-                        filteredToAccounts
+                      accountNumber={
+                        toAccountNumber
                       }
-                      open={
-                        showToAccounts
+                      setAccountNumber={
+                        handleReceiverNumberChange
                       }
-                      setOpen={
-                        setShowToAccounts
+                      onVerify={
+                        lookupReceiver
                       }
-                      onSelect={
-                        handleToAccount
+                      loading={
+                        loadingReceiver
                       }
                       error={
                         errors.toAccount
                       }
+                      onClear={
+                        clearReceiver
+                      }
                     />
                   </Stack>
                 )}
 
-                {/* =========================================
-                    STEP 2
-                ========================================= */}
+                {/* STEP 1 */}
 
                 {activeStep === 1 && (
                   <Stack spacing={3}>
+                    <Box>
+                      <Typography
+                        variant="h6"
+                        fontWeight={900}
+                        color="#0f172a"
+                      >
+                        Enter Transfer Amount
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        Enter the amount you
+                        want to transfer.
+                      </Typography>
+                    </Box>
+
                     <TransferRoute
                       fromAccount={
                         fromAccount
                       }
-                      toAccount={toAccount}
+                      toAccount={
+                        toAccount
+                      }
                     />
 
-                    <Divider />
+                    <TextField
+                      fullWidth
+                      label="Transfer Amount"
+                      value={amount}
+                      onChange={
+                        handleAmountChange
+                      }
+                      error={Boolean(
+                        errors.amount
+                      )}
+                      helperText={
+                        errors.amount ||
+                        "Enter an amount up to 2 decimal places."
+                      }
+                      placeholder="0.00"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            ₹
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={{
+                        "& .MuiOutlinedInput-root":
+                          {
+                            borderRadius: 2.5,
+                            minHeight: 60,
+                          },
+                      }}
+                    />
 
-                    <Box>
-                      <Typography
-                        variant="subtitle2"
-                        fontWeight={800}
-                        sx={{ mb: 1 }}
-                      >
-                        Transfer Amount
-                      </Typography>
-
-                      <TextField
-                        fullWidth
-                        value={amount}
-                        onChange={
-                          handleAmountChange
-                        }
-                        placeholder="0.00"
-                        error={Boolean(
-                          errors.amount
-                        )}
-                        helperText={
-                          errors.amount ||
-                          "Available balance is shown below."
-                        }
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <Typography
-                                fontSize="1.25rem"
-                                fontWeight={900}
-                              >
-                                ₹
-                              </Typography>
-                            </InputAdornment>
-                          ),
-                        }}
-                        sx={{
-                          "& .MuiOutlinedInput-root":
-                            {
-                              minHeight: 72,
-                              borderRadius: 2.5,
-                              bgcolor:
-                                "#f8fafc",
-                              fontSize:
-                                "1.55rem",
-                              fontWeight: 900,
-                            },
-                        }}
-                      />
-                    </Box>
-
-                    {fromAccount && (
-                      <BalanceCard
-                        account={
-                          fromAccount
-                        }
-                        transferAmount={
-                          transferAmount
-                        }
-                        remainingBalance={
-                          remainingBalance
-                        }
-                      />
-                    )}
+                    <BalanceCard
+                      account={
+                        fromAccount
+                      }
+                      amount={
+                        transferAmount
+                      }
+                      remaining={
+                        remainingBalance
+                      }
+                    />
 
                     <QuickAmounts
-                      setAmount={setAmount}
+                      onSelect={(value) =>
+                        setAmount(
+                          String(value)
+                        )
+                      }
                     />
                   </Stack>
                 )}
 
-                {/* =========================================
-                    STEP 3
-                ========================================= */}
+                {/* STEP 2 */}
 
                 {activeStep === 2 && (
-                  <Stack spacing={2.5}>
+                  <Stack spacing={3}>
+                    <Box>
+                      <Typography
+                        variant="h6"
+                        fontWeight={900}
+                        color="#0f172a"
+                      >
+                        Review & Confirm
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        Please verify the transfer
+                        details before confirming.
+                      </Typography>
+                    </Box>
+
                     <ReviewCard
                       fromAccount={
                         fromAccount
                       }
-                      toAccount={toAccount}
+                      toAccount={
+                        toAccount
+                      }
                       amount={
                         transferAmount
                       }
@@ -1069,16 +1256,15 @@ function Transfer() {
                         borderRadius: 2.5,
                       }}
                     >
-                      Please verify the sender,
-                      receiver and amount before
-                      confirming the transfer.
+                      Please make sure the receiver
+                      account details are correct.
+                      Transfers may not be reversible
+                      after processing.
                     </Alert>
                   </Stack>
                 )}
 
-                {/* =========================================
-                    NAVIGATION
-                ========================================= */}
+                <Divider sx={{ my: 4 }} />
 
                 <Stack
                   direction={{
@@ -1086,17 +1272,17 @@ function Transfer() {
                     sm: "row",
                   }}
                   justifyContent="space-between"
-                  spacing={1.5}
-                  sx={{ mt: 4 }}
+                  spacing={2}
                 >
                   <Button
                     variant="outlined"
                     startIcon={<Refresh />}
-                    onClick={resetTransfer}
+                    onClick={
+                      resetTransfer
+                    }
                     disabled={processing}
                     sx={{
-                      minHeight: 48,
-                      borderRadius: 2.5,
+                      borderRadius: 2,
                       textTransform:
                         "none",
                       fontWeight: 800,
@@ -1115,18 +1301,14 @@ function Transfer() {
                         startIcon={
                           <ArrowBack />
                         }
-                        onClick={() =>
-                          setActiveStep(
-                            (current) =>
-                              current - 1
-                          )
+                        onClick={
+                          handleBack
                         }
                         disabled={
                           processing
                         }
                         sx={{
-                          minHeight: 48,
-                          borderRadius: 2.5,
+                          borderRadius: 2,
                           textTransform:
                             "none",
                           fontWeight: 800,
@@ -1149,36 +1331,30 @@ function Transfer() {
                         handleContinue
                       }
                       disabled={
-                        processing ||
-                        loadingAccounts
+                        processing
                       }
                       sx={{
-                        minHeight: 48,
-                        minWidth: 170,
-                        borderRadius: 2.5,
+                        borderRadius: 2,
                         textTransform:
                           "none",
-                        fontWeight: 900,
-                        boxShadow:
-                          "0 8px 20px rgba(25,118,210,.2)",
+                        fontWeight: 800,
+                        minWidth: 140,
                       }}
                     >
                       {activeStep === 0
                         ? "Continue"
                         : activeStep === 1
-                        ? "Review Transfer"
-                        : "Confirm Transfer"}
+                        ? "Review"
+                        : "Confirm"}
                     </Button>
                   </Stack>
                 </Stack>
               </CardContent>
             </Card>
 
-            {/* =============================================
-                SIDEBAR
-            ============================================= */}
+            {/* SIDEBAR */}
 
-            <Stack spacing={2.5}>
+            <Stack spacing={3}>
               <SecurityCard />
 
               <TransferSummary
@@ -1199,9 +1375,7 @@ function Transfer() {
         )}
       </Box>
 
-      {/* ===================================================
-          CONFIRM DIALOG
-      =================================================== */}
+      {/* CONFIRM DIALOG */}
 
       <Dialog
         open={confirmOpen}
@@ -1211,73 +1385,47 @@ function Transfer() {
         }
         fullWidth
         maxWidth="sm"
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-          },
-        }}
       >
-        <DialogTitle sx={{ p: 3 }}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-          >
-            <Box>
-              <Typography
-                variant="h6"
-                fontWeight={900}
-              >
-                Confirm Transfer
-              </Typography>
-
-              <Typography
-                variant="body2"
-                color="text.secondary"
-              >
-                Review before processing
-              </Typography>
-            </Box>
-
-            <IconButton
-              onClick={() =>
-                setConfirmOpen(false)
-              }
-              disabled={processing}
-            >
-              <Close />
-            </IconButton>
-          </Stack>
+        <DialogTitle
+          sx={{
+            fontWeight: 900,
+          }}
+        >
+          Confirm Transfer
         </DialogTitle>
 
-        <DialogContent
-          dividers
-          sx={{ p: 3 }}
-        >
-          <ReviewCard
-            fromAccount={fromAccount}
-            toAccount={toAccount}
-            amount={transferAmount}
-            fee={fee}
-            total={total}
-          />
+        <DialogContent>
+          <Stack spacing={2}>
+            <Alert
+              severity="info"
+              icon={<VerifiedUser />}
+              sx={{
+                borderRadius: 2.5,
+              }}
+            >
+              You are about to transfer funds to a
+              verified receiver account.
+            </Alert>
 
-          <Alert
-            severity="info"
-            icon={<Lock />}
-            sx={{
-              mt: 2,
-              borderRadius: 2.5,
-            }}
-          >
-            This transaction will be submitted
-            securely to the banking system.
-          </Alert>
+            <ReviewCard
+              fromAccount={
+                fromAccount
+              }
+              toAccount={toAccount}
+              amount={transferAmount}
+              fee={fee}
+              total={total}
+            />
+          </Stack>
         </DialogContent>
 
-        <DialogActions sx={{ p: 3 }}>
+        <DialogActions
+          sx={{
+            p: 3,
+            pt: 1,
+          }}
+        >
           <Button
-            variant="outlined"
             onClick={() =>
               setConfirmOpen(false)
             }
@@ -1293,7 +1441,9 @@ function Transfer() {
 
           <Button
             variant="contained"
-            onClick={handleTransfer}
+            onClick={
+              handleTransfer
+            }
             disabled={processing}
             startIcon={
               processing ? (
@@ -1302,30 +1452,28 @@ function Transfer() {
                   color="inherit"
                 />
               ) : (
-                <Check />
+                <Lock />
               )
             }
             sx={{
               borderRadius: 2,
               textTransform: "none",
-              fontWeight: 900,
-              minWidth: 160,
+              fontWeight: 800,
+              minWidth: 150,
             }}
           >
             {processing
               ? "Processing..."
-              : "Confirm & Transfer"}
+              : "Confirm Transfer"}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* ===================================================
-          SNACKBAR
-      =================================================== */}
+      {/* SNACKBAR */}
 
       <Snackbar
         open={notification.open}
-        autoHideDuration={5000}
+        autoHideDuration={4000}
         onClose={() =>
           setNotification(
             (current) => ({
@@ -1351,11 +1499,7 @@ function Transfer() {
             )
           }
           sx={{
-            borderRadius: 2.5,
-            minWidth: {
-              xs: "calc(100vw - 32px)",
-              sm: 360,
-            },
+            width: "100%",
           }}
         >
           {notification.message}
@@ -1410,8 +1554,200 @@ function AccountSelector({
           <Chip
             size="small"
             label="Selected"
+            color="primary"
+            variant="outlined"
+          />
+        )}
+      </Stack>
+
+      <Box sx={{ position: "relative" }}>
+        <TextField
+          fullWidth
+          value={
+            account
+              ? `${getAccountNumber(
+                  account
+                )} — ${getCustomerName(
+                  account
+                )}`
+              : search
+          }
+          onChange={(event) => {
+            if (account) {
+              onSelect(null);
+              setSearch("");
+            } else {
+              setSearch(
+                event.target.value
+              );
+            }
+          }}
+          onFocus={() =>
+            setOpen(true)
+          }
+          placeholder="Search your account"
+          error={Boolean(error)}
+          helperText={error}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <AccountBalanceWallet />
+              </InputAdornment>
+            ),
+            endAdornment: account ? (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={() => {
+                    onSelect(null);
+                    setSearch("");
+                  }}
+                  size="small"
+                >
+                  <Close />
+                </IconButton>
+              </InputAdornment>
+            ) : (
+              <InputAdornment position="end">
+                <Search />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              minHeight: 58,
+              borderRadius: 2.5,
+              bgcolor: "#f8fafc",
+            },
+          }}
+        />
+
+        <Collapse in={open && !account}>
+          <Paper
+            elevation={8}
+            sx={{
+              position: "absolute",
+              zIndex: 20,
+              left: 0,
+              right: 0,
+              mt: 1,
+              maxHeight: 280,
+              overflow: "auto",
+              borderRadius: 2.5,
+              border:
+                "1px solid #e2e8f0",
+            }}
+          >
+            {accounts.length === 0 ? (
+              <Box sx={{ p: 3 }}>
+                <Typography
+                  color="text.secondary"
+                  align="center"
+                >
+                  No accounts found.
+                </Typography>
+              </Box>
+            ) : (
+              <List disablePadding>
+                {accounts.map((item) => (
+                  <ListItem
+                    key={item.id}
+                    disablePadding
+                  >
+                    <ListItemButton
+                      onClick={() =>
+                        onSelect(item)
+                      }
+                    >
+                      <Avatar
+                        sx={{
+                          mr: 1.5,
+                          bgcolor:
+                            "#e0f2fe",
+                          color:
+                            "#0369a1",
+                        }}
+                      >
+                        <AccountBalance />
+                      </Avatar>
+
+                      <ListItemText
+                        primary={
+                          <Typography fontWeight={800}>
+                            {getAccountNumber(
+                              item
+                            )}
+                          </Typography>
+                        }
+                        secondary={
+                          <>
+                            {getCustomerName(
+                              item
+                            )}{" "}
+                            •{" "}
+                            {getAccountType(
+                              item
+                            )}
+                          </>
+                        }
+                      />
+
+                      <ChevronRight color="action" />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Paper>
+        </Collapse>
+      </Box>
+    </Box>
+  );
+}
+
+/* =========================================================
+   RECEIVER SELECTOR
+========================================================= */
+
+function ReceiverSelector({
+  account,
+  accountNumber,
+  setAccountNumber,
+  onVerify,
+  loading,
+  error,
+  onClear,
+}) {
+  return (
+    <Box>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ mb: 1.2 }}
+      >
+        <Box>
+          <Typography
+            variant="subtitle1"
+            fontWeight={900}
+            color="#0f172a"
+          >
+            To Account
+          </Typography>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+          >
+            Destination account
+          </Typography>
+        </Box>
+
+        {account && (
+          <Chip
+            size="small"
+            label="Verified"
             color="success"
-            icon={<Check />}
+            icon={<CheckCircle />}
             variant="outlined"
           />
         )}
@@ -1422,10 +1758,10 @@ function AccountSelector({
           elevation={0}
           sx={{
             border:
-              "1px solid #bfdbfe",
+              "1px solid #86efac",
             borderRadius: 2.5,
             p: 2,
-            bgcolor: "#f8fbff",
+            bgcolor: "#f0fdf4",
           }}
         >
           <Stack
@@ -1438,19 +1774,16 @@ function AccountSelector({
                 width: 46,
                 height: 46,
                 borderRadius: 2,
-                bgcolor: "#dbeafe",
-                color:
-                  "primary.main",
+                bgcolor: "#dcfce7",
+                color: "#15803d",
               }}
             >
-              <AccountBalance />
+              <CheckCircle />
             </Avatar>
 
             <Box flex={1}>
-              <Typography
-                fontWeight={900}
-              >
-                {getAccountNumber(
+              <Typography fontWeight={900}>
+                {getCustomerName(
                   account
                 )}
               </Typography>
@@ -1459,7 +1792,8 @@ function AccountSelector({
                 variant="body2"
                 color="text.secondary"
               >
-                {getCustomerName(
+                Account:{" "}
+                {getAccountNumber(
                   account
                 )}
               </Typography>
@@ -1477,204 +1811,106 @@ function AccountSelector({
                   variant="outlined"
                 />
 
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{
-                    alignSelf:
-                      "center",
-                  }}
-                >
-                  Balance{" "}
-                  {formatCurrency(
-                    getBalance(
-                      account
-                    )
-                  )}
-                </Typography>
+                <Chip
+                  size="small"
+                  label={
+                    account.status ||
+                    "ACTIVE"
+                  }
+                  color="success"
+                  variant="outlined"
+                />
               </Stack>
             </Box>
 
-            <Tooltip title="Change account">
+            <Tooltip title="Change receiver">
               <IconButton
-                onClick={() =>
-                  setOpen(true)
-                }
+                onClick={onClear}
               >
-                <ChevronRight />
+                <Close />
               </IconButton>
             </Tooltip>
           </Stack>
         </Paper>
       ) : (
-        <Box>
-          <TextField
-            fullWidth
-            value={search}
-            onFocus={() =>
-              setOpen(true)
-            }
-            onChange={(event) =>
-              setSearch(
-                event.target.value
+        <TextField
+          fullWidth
+          value={accountNumber}
+          onChange={(event) =>
+            setAccountNumber(
+              event.target.value
+            )
+          }
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              /^\d{10}$/.test(
+                accountNumber
               )
+            ) {
+              event.preventDefault();
+              onVerify();
             }
-            placeholder="Search account number, customer or ID..."
-            error={Boolean(error)}
-            helperText={error}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search />
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              "& .MuiOutlinedInput-root":
-                {
-                  minHeight: 58,
-                  borderRadius: 2.5,
-                  bgcolor: "#f8fafc",
-                },
-            }}
-          />
-
-          <Collapse in={open}>
-            <AccountList
-              accounts={accounts}
-              onSelect={onSelect}
-            />
-          </Collapse>
-        </Box>
-      )}
-    </Box>
-  );
-}
-
-/* =========================================================
-   ACCOUNT LIST
-========================================================= */
-
-function AccountList({
-  accounts,
-  onSelect,
-}) {
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        mt: 1,
-        border:
-          "1px solid #e2e8f0",
-        borderRadius: 2.5,
-        overflow: "hidden",
-        maxHeight: 300,
-        overflowY: "auto",
-      }}
-    >
-      {accounts.length === 0 ? (
-        <Box
-          sx={{
-            py: 5,
-            textAlign: "center",
           }}
-        >
-          <AccountBalance
-            sx={{
-              fontSize: 40,
-              color: "text.disabled",
-            }}
-          />
+          inputProps={{
+            inputMode: "numeric",
+            pattern: "[0-9]*",
+            maxLength: 10,
+          }}
+          placeholder="Enter 10-digit account number"
+          error={Boolean(error)}
+          helperText={
+            error ||
+            "Enter the receiver's 10-digit account number and click Verify."
+          }
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search />
+              </InputAdornment>
+            ),
 
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mt: 1 }}
-          >
-            No accounts found.
-          </Typography>
-        </Box>
-      ) : (
-        <List disablePadding>
-          {accounts.map(
-            (account, index) => (
-              <ListItem
-                key={
-                  account.id ||
-                  account.accountNumber ||
-                  index
-                }
-                disablePadding
-                divider
-              >
-                <ListItemButton
-                  onClick={() =>
-                    onSelect(
-                      account
+            endAdornment: (
+              <InputAdornment position="end">
+                <Button
+                  variant="contained"
+                  onClick={onVerify}
+                  disabled={
+                    loading ||
+                    !/^\d{10}$/.test(
+                      accountNumber
                     )
                   }
                   sx={{
-                    py: 1.5,
-                    px: 2,
-                    "&:hover": {
-                      bgcolor:
-                        "#f8fafc",
-                    },
+                    borderRadius: 2,
+                    textTransform:
+                      "none",
+                    fontWeight: 800,
+                    minWidth: 95,
                   }}
                 >
-                  <Avatar
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      mr: 1.5,
-                      bgcolor:
-                        "#eff6ff",
-                      color:
-                        "primary.main",
-                    }}
-                  >
-                    <AccountBalance
-                      sx={{
-                        fontSize: 20,
-                      }}
+                  {loading ? (
+                    <CircularProgress
+                      size={20}
+                      color="inherit"
                     />
-                  </Avatar>
-
-                  <ListItemText
-                    primary={
-                      <Typography
-                        fontWeight={800}
-                      >
-                        {getAccountNumber(
-                          account
-                        )}
-                      </Typography>
-                    }
-                    secondary={
-                      <>
-                        {getCustomerName(
-                          account
-                        )}{" "}
-                        •{" "}
-                        {formatCurrency(
-                          getBalance(
-                            account
-                          )
-                        )}
-                      </>
-                    }
-                  />
-
-                  <ChevronRight
-                    color="disabled"
-                  />
-                </ListItemButton>
-              </ListItem>
-            )
-          )}
-        </List>
+                  ) : (
+                    "Verify"
+                  )}
+                </Button>
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              minHeight: 58,
+              borderRadius: 2.5,
+              bgcolor: "#f8fafc",
+            },
+          }}
+        />
       )}
-    </Paper>
+    </Box>
   );
 }
 
@@ -1690,11 +1926,10 @@ function TransferRoute({
     <Paper
       elevation={0}
       sx={{
-        p: 2,
-        borderRadius: 2.5,
-        bgcolor: "#f8fafc",
         border:
           "1px solid #e2e8f0",
+        borderRadius: 2.5,
+        p: 2,
       }}
     >
       <Stack
@@ -1710,25 +1945,7 @@ function TransferRoute({
           account={fromAccount}
         />
 
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Avatar
-            sx={{
-              width: 40,
-              height: 40,
-              bgcolor: "#dbeafe",
-              color:
-                "primary.main",
-            }}
-          >
-            <ArrowForward />
-          </Avatar>
-        </Box>
+        <ArrowForward color="action" />
 
         <RouteAccount
           label="To"
@@ -1744,36 +1961,56 @@ function RouteAccount({
   account,
 }) {
   return (
-    <Box
-      sx={{
-        flex: 1,
-        width: "100%",
-      }}
+    <Stack
+      direction="row"
+      spacing={1.2}
+      alignItems="center"
+      flex={1}
+      width="100%"
     >
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        fontWeight={700}
+      <Avatar
+        sx={{
+          bgcolor:
+            label === "From"
+              ? "#dbeafe"
+              : "#dcfce7",
+          color:
+            label === "From"
+              ? "#2563eb"
+              : "#15803d",
+        }}
       >
-        {label}
-      </Typography>
-
-      <Typography
-        fontWeight={900}
-        sx={{ mt: 0.3 }}
-      >
-        {getAccountNumber(
-          account
+        {label === "From" ? (
+          <ArrowBack />
+        ) : (
+          <ArrowForward />
         )}
-      </Typography>
+      </Avatar>
 
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
-        {getCustomerName(account)}
-      </Typography>
-    </Box>
+      <Box>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+        >
+          {label}
+        </Typography>
+
+        <Typography fontWeight={900}>
+          {getAccountNumber(
+            account
+          )}
+        </Typography>
+
+        <Typography
+          variant="caption"
+          color="text.secondary"
+        >
+          {getCustomerName(
+            account
+          )}
+        </Typography>
+      </Box>
+    </Stack>
   );
 }
 
@@ -1783,24 +2020,12 @@ function RouteAccount({
 
 function BalanceCard({
   account,
-  transferAmount,
-  remainingBalance,
+  amount,
+  remaining,
 }) {
-  const balance =
-    getBalance(account);
-
-  const percentage =
-    balance > 0
-      ? Math.min(
-          100,
-          (transferAmount /
-            balance) *
-            100
-        )
-      : 0;
-
-  const insufficient =
-    transferAmount > balance;
+  if (!account) {
+    return null;
+  }
 
   return (
     <Paper
@@ -1808,111 +2033,70 @@ function BalanceCard({
       sx={{
         p: 2.5,
         borderRadius: 2.5,
-        border: insufficient
-          ? "1px solid #fecaca"
-          : "1px solid #dbeafe",
-        bgcolor: insufficient
-          ? "#fff7f7"
-          : "#f8fbff",
+        border:
+          "1px solid #e2e8f0",
+        bgcolor: "#f8fafc",
       }}
     >
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-      >
-        <Box>
+      <Stack spacing={1.5}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+        >
           <Typography
-            variant="caption"
+            variant="body2"
             color="text.secondary"
           >
-            Available balance
+            Available Balance
+          </Typography>
+
+          <Typography fontWeight={900}>
+            {formatCurrency(
+              getBalance(account)
+            )}
+          </Typography>
+        </Stack>
+
+        <Divider />
+
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+        >
+          <Typography
+            variant="body2"
+            color="text.secondary"
+          >
+            After Transfer
           </Typography>
 
           <Typography
-            variant="h5"
             fontWeight={900}
-            sx={{ mt: 0.3 }}
+            color={
+              remaining < 0
+                ? "error.main"
+                : "success.main"
+            }
           >
-            {formatCurrency(balance)}
-          </Typography>
-        </Box>
-
-        <Avatar
-          sx={{
-            bgcolor: insufficient
-              ? "#fee2e2"
-              : "#dbeafe",
-            color: insufficient
-              ? "error.main"
-              : "primary.main",
-          }}
-        >
-          {insufficient ? (
-            <Warning />
-          ) : (
-            <AccountBalanceWallet />
-          )}
-        </Avatar>
-      </Stack>
-
-      <LinearProgress
-        variant="determinate"
-        value={percentage}
-        color={
-          insufficient
-            ? "error"
-            : "primary"
-        }
-        sx={{
-          mt: 2,
-          height: 7,
-          borderRadius: 10,
-        }}
-      />
-
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        sx={{ mt: 1 }}
-      >
-        <Typography
-          variant="caption"
-          color="text.secondary"
-        >
-          Transfer
-        </Typography>
-
-        <Typography
-          variant="caption"
-          fontWeight={800}
-        >
-          {formatCurrency(
-            transferAmount
-          )}
-        </Typography>
-      </Stack>
-
-      {!insufficient && (
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            display: "block",
-            mt: 1.5,
-          }}
-        >
-          Remaining balance:{" "}
-          <strong>
             {formatCurrency(
-              Math.max(
-                remainingBalance,
-                0
-              )
+              remaining
             )}
-          </strong>
-        </Typography>
-      )}
+          </Typography>
+        </Stack>
+
+        {amount > 0 &&
+          remaining >= 0 && (
+            <Alert
+              severity="success"
+              icon={<CheckCircle />}
+              sx={{
+                borderRadius: 2,
+              }}
+            >
+              Sufficient balance available.
+            </Alert>
+          )}
+      </Stack>
     </Paper>
   );
 }
@@ -1922,42 +2106,37 @@ function BalanceCard({
 ========================================================= */
 
 function QuickAmounts({
-  setAmount,
+  onSelect,
 }) {
-  const values = [
+  const amounts = [
     500,
     1000,
+    2000,
     5000,
     10000,
-    25000,
   ];
 
   return (
     <Box>
       <Typography
-        variant="caption"
-        fontWeight={700}
-        color="text.secondary"
+        variant="body2"
+        fontWeight={800}
+        sx={{ mb: 1 }}
       >
-        Quick amount
+        Quick Amounts
       </Typography>
 
       <Stack
         direction="row"
-        spacing={1}
         flexWrap="wrap"
-        useFlexGap
-        sx={{ mt: 1 }}
+        gap={1}
       >
-        {values.map((value) => (
+        {amounts.map((value) => (
           <Button
             key={value}
             variant="outlined"
-            size="small"
             onClick={() =>
-              setAmount(
-                String(value)
-              )
+              onSelect(value)
             }
             sx={{
               borderRadius: 2,
@@ -1966,10 +2145,7 @@ function QuickAmounts({
               fontWeight: 800,
             }}
           >
-            ₹
-            {value.toLocaleString(
-              "en-IN"
-            )}
+            {formatCurrency(value)}
           </Button>
         ))}
       </Stack>
@@ -1992,31 +2168,26 @@ function ReviewCard({
     <Paper
       elevation={0}
       sx={{
-        borderRadius: 2.5,
         border:
           "1px solid #e2e8f0",
+        borderRadius: 2.5,
         overflow: "hidden",
       }}
     >
       <Box
         sx={{
-          px: 2.5,
-          py: 2,
+          p: 2.5,
           bgcolor: "#f8fafc",
-          borderBottom:
-            "1px solid #e2e8f0",
         }}
       >
-        <Typography
-          fontWeight={900}
-        >
-          Transfer Summary
+        <Typography fontWeight={900}>
+          Transfer Details
         </Typography>
       </Box>
 
-      <Box sx={{ p: 2.5 }}>
+      <Stack spacing={0}>
         <SummaryLine
-          label="From account"
+          label="From Account"
           value={getAccountNumber(
             fromAccount
           )}
@@ -2029,10 +2200,8 @@ function ReviewCard({
           )}
         />
 
-        <Divider sx={{ my: 1.5 }} />
-
         <SummaryLine
-          label="To account"
+          label="To Account"
           value={getAccountNumber(
             toAccount
           )}
@@ -2045,25 +2214,21 @@ function ReviewCard({
           )}
         />
 
-        <Divider sx={{ my: 1.5 }} />
+        <Divider />
 
         <SummaryLine
-          label="Transfer amount"
+          label="Transfer Amount"
           value={formatCurrency(
             amount
           )}
         />
 
         <SummaryLine
-          label="Transfer fee"
-          value={
-            fee === 0
-              ? "Free"
-              : formatCurrency(fee)
-          }
+          label="Transfer Fee"
+          value={formatCurrency(
+            fee
+          )}
         />
-
-        <Divider sx={{ my: 1.5 }} />
 
         <SummaryLine
           label="Total"
@@ -2072,14 +2237,10 @@ function ReviewCard({
           )}
           strong
         />
-      </Box>
+      </Stack>
     </Paper>
   );
 }
-
-/* =========================================================
-   SUMMARY LINE
-========================================================= */
 
 function SummaryLine({
   label,
@@ -2090,28 +2251,25 @@ function SummaryLine({
     <Stack
       direction="row"
       justifyContent="space-between"
-      alignItems="center"
       spacing={2}
-      sx={{ py: 0.7 }}
+      sx={{ p: 2 }}
     >
       <Typography
         variant="body2"
         color="text.secondary"
+        fontWeight={
+          strong ? 800 : 500
+        }
       >
         {label}
       </Typography>
 
       <Typography
         variant="body2"
-        fontWeight={strong ? 900 : 700}
-        color={
-          strong
-            ? "primary.main"
-            : "#334155"
+        fontWeight={
+          strong ? 900 : 700
         }
-        sx={{
-          textAlign: "right",
-        }}
+        textAlign="right"
       >
         {value}
       </Typography>
@@ -2120,7 +2278,7 @@ function SummaryLine({
 }
 
 /* =========================================================
-   TRANSFER SUMMARY SIDEBAR
+   TRANSFER SUMMARY
 ========================================================= */
 
 function TransferSummary({
@@ -2134,121 +2292,94 @@ function TransferSummary({
     <Card
       elevation={0}
       sx={{
-        borderRadius: 3,
         border:
           "1px solid #e2e8f0",
-        boxShadow:
-          "0 6px 24px rgba(15,23,42,.045)",
+        borderRadius: 3,
       }}
     >
-      <CardContent sx={{ p: 2.5 }}>
+      <CardContent>
         <Typography
-          variant="h6"
           fontWeight={900}
+          sx={{ mb: 2 }}
         >
           Transfer Summary
         </Typography>
 
-        <Typography
-          variant="caption"
-          color="text.secondary"
-        >
-          Live transaction preview
-        </Typography>
-
-        <Box sx={{ mt: 2.5 }}>
+        <Stack spacing={1.5}>
           <MiniAccount
-            label="FROM"
+            label="From"
             account={fromAccount}
           />
 
-          <Box
-            sx={{
-              ml: 2.2,
-              height: 25,
-              borderLeft:
-                "1px dashed #cbd5e1",
-            }}
-          />
-
           <MiniAccount
-            label="TO"
+            label="To"
             account={toAccount}
           />
-        </Box>
 
-        <Divider sx={{ my: 2 }} />
+          <Divider />
 
-        <SummaryLine
-          label="Amount"
-          value={formatCurrency(
-            amount
-          )}
-        />
+          <SummaryLine
+            label="Amount"
+            value={formatCurrency(
+              amount
+            )}
+          />
 
-        <SummaryLine
-          label="Fee"
-          value={
-            fee === 0
-              ? "Free"
-              : formatCurrency(fee)
-          }
-        />
+          <SummaryLine
+            label="Fee"
+            value={formatCurrency(
+              fee
+            )}
+          />
 
-        <SummaryLine
-          label="Total"
-          value={formatCurrency(
-            total
-          )}
-          strong
-        />
+          <SummaryLine
+            label="Total"
+            value={formatCurrency(
+              total
+            )}
+            strong
+          />
+        </Stack>
       </CardContent>
     </Card>
   );
 }
+
+/* =========================================================
+   MINI ACCOUNT
+========================================================= */
 
 function MiniAccount({
   label,
   account,
 }) {
   return (
-    <Stack
-      direction="row"
-      spacing={1.2}
-      alignItems="center"
-    >
-      <Avatar
-        sx={{
-          width: 34,
-          height: 34,
-          bgcolor: "#eff6ff",
-          color: "primary.main",
-        }}
+    <Box>
+      <Typography
+        variant="caption"
+        color="text.secondary"
       >
-        <AccountBalance
-          sx={{ fontSize: 17 }}
-        />
-      </Avatar>
+        {label}
+      </Typography>
 
-      <Box>
-        <Typography
-          variant="caption"
-          fontWeight={800}
-          color="text.secondary"
-        >
-          {label}
-        </Typography>
+      <Typography
+        variant="body2"
+        fontWeight={900}
+      >
+        {getAccountNumber(
+          account
+        )}
+      </Typography>
 
-        <Typography
-          variant="body2"
-          fontWeight={900}
-        >
-          {getAccountNumber(
-            account
-          )}
-        </Typography>
-      </Box>
-    </Stack>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+      >
+        {getCustomerName(
+          account
+        )}
+      </Typography>
+    </Box>
   );
 }
 
@@ -2261,59 +2392,55 @@ function SecurityCard() {
     <Card
       elevation={0}
       sx={{
-        borderRadius: 3,
         border:
           "1px solid #bbf7d0",
-        background:
-          "linear-gradient(135deg,#f0fdf4,#ffffff)",
+        borderRadius: 3,
+        bgcolor: "#f0fdf4",
       }}
     >
-      <CardContent sx={{ p: 2.5 }}>
-        <Stack
-          direction="row"
-          spacing={1.5}
-          alignItems="center"
-          sx={{ mb: 2.5 }}
-        >
-          <Avatar
-            sx={{
-              bgcolor: "#dcfce7",
-              color: "#15803d",
-            }}
+      <CardContent>
+        <Stack spacing={2}>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
           >
-            <Security />
-          </Avatar>
-
-          <Box>
-            <Typography
-              fontWeight={900}
+            <Avatar
+              sx={{
+                bgcolor: "#dcfce7",
+                color: "#15803d",
+              }}
             >
-              Secure Transfer
-            </Typography>
+              <Security />
+            </Avatar>
 
-            <Typography
-              variant="caption"
-              color="text.secondary"
-            >
-              Banking protection enabled
-            </Typography>
-          </Box>
-        </Stack>
+            <Box>
+              <Typography fontWeight={900}>
+                Secure Transfer
+              </Typography>
 
-        <Stack spacing={1.7}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Protected by banking security
+              </Typography>
+            </Box>
+          </Stack>
+
           <SecurityRow
-            title="Authenticated request"
-            text="Your request is sent through the authenticated API."
+            icon={<VerifiedUser />}
+            text="Receiver verification"
           />
 
           <SecurityRow
-            title="Account validation"
-            text="Sender and receiver accounts are verified."
+            icon={<Lock />}
+            text="JWT authenticated"
           />
 
           <SecurityRow
-            title="Balance validation"
-            text="Transfer amount is checked against available balance."
+            icon={<CheckCircle />}
+            text="Server-side authorization"
           />
         </Stack>
       </CardContent>
@@ -2322,291 +2449,287 @@ function SecurityCard() {
 }
 
 function SecurityRow({
-  title,
+  icon,
   text,
 }) {
   return (
     <Stack
       direction="row"
       spacing={1}
-      alignItems="flex-start"
+      alignItems="center"
     >
-      <CheckCircle
+      <Box
         sx={{
-          fontSize: 19,
-          color: "#16a34a",
-          mt: 0.2,
+          display: "flex",
+          color: "#15803d",
         }}
-      />
-
-      <Box>
-        <Typography
-          variant="body2"
-          fontWeight={800}
-        >
-          {title}
-        </Typography>
-
-        <Typography
-          variant="caption"
-          color="text.secondary"
-        >
-          {text}
-        </Typography>
+      >
+        {icon}
       </Box>
+
+      <Typography
+        variant="body2"
+        fontWeight={700}
+      >
+        {text}
+      </Typography>
     </Stack>
   );
 }
 
 /* =========================================================
-   RECENT INFO
+   RECENT INFO CARD
 ========================================================= */
 
 function RecentInfoCard({
   accounts,
 }) {
-  const totalBalance =
-    accounts.reduce(
-      (sum, account) =>
-        sum +
-        getBalance(account),
-      0
-    );
-
   return (
     <Card
       elevation={0}
       sx={{
-        borderRadius: 3,
         border:
           "1px solid #e2e8f0",
+        borderRadius: 3,
       }}
     >
-      <CardContent sx={{ p: 2.5 }}>
+      <CardContent>
         <Stack
           direction="row"
-          spacing={1.2}
+          spacing={1}
           alignItems="center"
+          sx={{ mb: 2 }}
         >
-          <Avatar
-            sx={{
-              width: 40,
-              height: 40,
-              bgcolor: "#f1f5f9",
-              color: "#475569",
-            }}
-          >
-            <History />
-          </Avatar>
+          <History />
 
-          <Box>
-            <Typography
-              fontWeight={900}
-            >
-              Account Overview
-            </Typography>
-
-            <Typography
-              variant="caption"
-              color="text.secondary"
-            >
-              Available banking accounts
-            </Typography>
-          </Box>
+          <Typography fontWeight={900}>
+            Available Accounts
+          </Typography>
         </Stack>
 
-        <Divider sx={{ my: 2 }} />
+        {accounts.length === 0 ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+          >
+            No accounts available.
+          </Typography>
+        ) : (
+          <Stack spacing={1.2}>
+            {accounts
+              .slice(0, 5)
+              .map((account) => (
+                <Paper
+                  key={account.id}
+                  elevation={0}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor:
+                      "#f8fafc",
+                    border:
+                      "1px solid #e2e8f0",
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    fontWeight={800}
+                  >
+                    {getAccountNumber(
+                      account
+                    )}
+                  </Typography>
 
-        <SummaryLine
-          label="Total accounts"
-          value={accounts.length}
-        />
-
-        <SummaryLine
-          label="Combined balance"
-          value={formatCurrency(
-            totalBalance
-          )}
-          strong
-        />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                  >
+                    {getCustomerName(
+                      account
+                    )}
+                  </Typography>
+                </Paper>
+              ))}
+          </Stack>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 /* =========================================================
-   SUCCESS
+   SUCCESS TRANSFER
 ========================================================= */
 
 function SuccessTransfer({
+  result,
   fromAccount,
   toAccount,
   amount,
-  result,
-  onNewTransfer,
-  onCopy,
+  onReset,
 }) {
   const transactionId =
     result?.transactionId ||
     result?.id ||
-    result?.transaction?.id ||
-    "Completed";
+    result?.transaction?.id;
 
   return (
     <Card
       elevation={0}
       sx={{
-        maxWidth: 850,
+        maxWidth: 800,
         mx: "auto",
-        borderRadius: 3,
         border:
           "1px solid #bbf7d0",
-        overflow: "hidden",
-        boxShadow:
-          "0 15px 50px rgba(22,101,52,.08)",
+        borderRadius: 4,
+        bgcolor: "#ffffff",
       }}
     >
-      <Box
+      <CardContent
         sx={{
-          py: 5,
-          px: 3,
-          textAlign: "center",
-          background:
-            "linear-gradient(180deg,#f0fdf4,#ffffff)",
+          p: {
+            xs: 3,
+            md: 5,
+          },
         }}
       >
-        <Avatar
-          sx={{
-            width: 76,
-            height: 76,
-            mx: "auto",
-            bgcolor: "#dcfce7",
-            color: "#16a34a",
-          }}
+        <Stack
+          spacing={3}
+          alignItems="center"
+          textAlign="center"
         >
-          <CheckCircle
-            sx={{ fontSize: 48 }}
-          />
-        </Avatar>
-
-        <Typography
-          variant="h4"
-          fontWeight={900}
-          sx={{
-            mt: 2,
-            letterSpacing: "-.035em",
-          }}
-        >
-          Transfer Successful
-        </Typography>
-
-        <Typography
-          color="text.secondary"
-          sx={{ mt: 0.7 }}
-        >
-          Your transfer has been submitted
-          successfully.
-        </Typography>
-      </Box>
-
-      <CardContent sx={{ p: 3 }}>
-        <Paper
-          elevation={0}
-          sx={{
-            p: 2,
-            borderRadius: 2.5,
-            bgcolor: "#f8fafc",
-            border:
-              "1px solid #e2e8f0",
-          }}
-        >
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
+          <Avatar
+            sx={{
+              width: 80,
+              height: 80,
+              bgcolor: "#dcfce7",
+              color: "#15803d",
+            }}
           >
-            <Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-              >
-                Transaction ID
-              </Typography>
+            <CheckCircle
+              sx={{ fontSize: 50 }}
+            />
+          </Avatar>
 
-              <Typography
-                fontWeight={900}
-                sx={{ mt: 0.3 }}
-              >
-                {transactionId}
-              </Typography>
-            </Box>
+          <Box>
+            <Typography
+              variant="h5"
+              fontWeight={900}
+              color="#15803d"
+            >
+              Transfer Successful
+            </Typography>
 
-            <Tooltip title="Copy transaction ID">
-              <IconButton
-                onClick={() =>
-                  onCopy(
+            <Typography
+              color="text.secondary"
+              sx={{ mt: 1 }}
+            >
+              Your money has been transferred
+              successfully.
+            </Typography>
+          </Box>
+
+          <Typography
+            variant="h4"
+            fontWeight={900}
+            color="#0f172a"
+          >
+            {formatCurrency(amount)}
+          </Typography>
+
+          <Paper
+            elevation={0}
+            sx={{
+              width: "100%",
+              p: 2.5,
+              borderRadius: 2.5,
+              bgcolor: "#f8fafc",
+              border:
+                "1px solid #e2e8f0",
+            }}
+          >
+            <Stack spacing={1.5}>
+              <SummaryLine
+                label="From"
+                value={`${getCustomerName(
+                  fromAccount
+                )} • ${getAccountNumber(
+                  fromAccount
+                )}`}
+              />
+
+              <SummaryLine
+                label="To"
+                value={`${getCustomerName(
+                  toAccount
+                )} • ${getAccountNumber(
+                  toAccount
+                )}`}
+              />
+
+              {transactionId && (
+                <SummaryLine
+                  label="Transaction ID"
+                  value={String(
                     transactionId
-                  )
-                }
-              >
-                <ContentCopy
-                  fontSize="small"
+                  )}
                 />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        </Paper>
+              )}
 
-        <Box sx={{ mt: 2 }}>
-          <SummaryLine
-            label="From"
-            value={getAccountNumber(
-              fromAccount
-            )}
-          />
+              <SummaryLine
+                label="Date"
+                value={formatDate(
+                  result?.createdAt ||
+                    result?.timestamp ||
+                    new Date()
+                )}
+              />
+            </Stack>
+          </Paper>
 
-          <SummaryLine
-            label="To"
-            value={getAccountNumber(
-              toAccount
-            )}
-          />
+          {transactionId && (
+            <Button
+              variant="outlined"
+              startIcon={
+                <ContentCopy />
+              }
+              onClick={() => {
+                navigator.clipboard?.writeText(
+                  String(transactionId)
+                );
+              }}
+              sx={{
+                borderRadius: 2,
+                textTransform:
+                  "none",
+                fontWeight: 800,
+              }}
+            >
+              Copy Transaction ID
+            </Button>
+          )}
 
-          <SummaryLine
-            label="Amount"
-            value={formatCurrency(
-              amount
-            )}
-            strong
-          />
-
-          <SummaryLine
-            label="Date"
-            value={formatDate(
-              result?.timestamp ||
-                result?.createdAt
-            )}
-          />
-        </Box>
-
-        <Button
-          fullWidth
-          variant="contained"
-          onClick={onNewTransfer}
-          startIcon={<SwapHoriz />}
-          sx={{
-            mt: 3,
-            minHeight: 50,
-            borderRadius: 2.5,
-            textTransform: "none",
-            fontWeight: 900,
-          }}
-        >
-          Make Another Transfer
-        </Button>
+          <Button
+            variant="contained"
+            onClick={onReset}
+            startIcon={<Refresh />}
+            sx={{
+              borderRadius: 2,
+              textTransform: "none",
+              fontWeight: 800,
+              minWidth: 180,
+            }}
+          >
+            Make Another Transfer
+          </Button>
+        </Stack>
       </CardContent>
     </Card>
   );
 }
+
+/* =========================================================
+   EXPORT
+========================================================= */
 
 export default Transfer;

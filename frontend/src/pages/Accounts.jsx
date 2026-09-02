@@ -33,7 +33,6 @@ import {
   Divider,
   IconButton,
   InputAdornment,
-  LinearProgress,
   Paper,
   Snackbar,
   Stack,
@@ -84,6 +83,14 @@ const getCustomerEmail = (account) => {
   );
 };
 
+const getAccountType = (account) => {
+  return (
+    account?.accountType ||
+    account?.type ||
+    "N/A"
+  );
+};
+
 /* =========================================================
    ACCOUNTS
 ========================================================= */
@@ -92,6 +99,8 @@ function Accounts() {
   const [accounts, setAccounts] = useState([]);
 
   const [accountNumber, setAccountNumber] = useState("");
+  const [accountType, setAccountType] =
+    useState("SAVINGS");
   const [balance, setBalance] = useState("");
   const [customerId, setCustomerId] = useState("");
 
@@ -177,6 +186,7 @@ function Accounts() {
 
   const resetForm = () => {
     setAccountNumber("");
+    setAccountType("SAVINGS");
     setBalance("");
     setCustomerId("");
     setEditingId(null);
@@ -187,6 +197,11 @@ function Accounts() {
   ======================================================= */
 
   const validateForm = () => {
+    if (!accountType) {
+      setError("Account type is required.");
+      return false;
+    }
+
     if (
       !accountNumber.trim() ||
       accountNumber.trim().length < 3
@@ -247,9 +262,15 @@ function Accounts() {
     try {
       const payload = {
         accountNumber: accountNumber.trim(),
+        accountType: accountType,
         balance: Number(balance),
         customerId: Number(customerId),
       };
+
+      console.log(
+        "Creating account with payload:",
+        payload
+      );
 
       const response = await api.post(
         "/accounts",
@@ -301,6 +322,12 @@ function Accounts() {
       account.accountNumber || ""
     );
 
+    setAccountType(
+      account.accountType ||
+        account.type ||
+        "SAVINGS"
+    );
+
     setBalance(
       String(account.balance ?? "")
     );
@@ -337,11 +364,17 @@ function Accounts() {
     try {
       const payload = {
         accountNumber: accountNumber.trim(),
+        accountType: accountType,
         balance: Number(balance),
         customer: {
           id: Number(customerId),
         },
       };
+
+      console.log(
+        "Updating account with payload:",
+        payload
+      );
 
       const response = await api.put(
         `/accounts/${editingId}`,
@@ -498,11 +531,16 @@ function Accounts() {
         getCustomerId(account) || ""
       ).toLowerCase();
 
+      const type = String(
+        getAccountType(account)
+      ).toLowerCase();
+
       return (
         accountNumber.includes(query) ||
         customerName.includes(query) ||
         customerEmail.includes(query) ||
-        customer.includes(query)
+        customer.includes(query) ||
+        type.includes(query)
       );
     });
   }, [accounts, search]);
@@ -640,16 +678,16 @@ function Accounts() {
         },
       }}
     >
-      {/* =================================================
-          HEADER
-      ================================================= */}
-
       <Box
         sx={{
           maxWidth: 1380,
           mx: "auto",
         }}
       >
+        {/* =================================================
+            HEADER
+        ================================================= */}
+
         <Stack
           direction={{
             xs: "column",
@@ -861,6 +899,7 @@ function Accounts() {
           ================================================= */}
 
           <Stack spacing={3}>
+
             {/* FORM */}
 
             <Card
@@ -955,6 +994,37 @@ function Accounts() {
                       gap: 2,
                     }}
                   >
+
+                    {/* ACCOUNT TYPE */}
+
+                    <TextField
+                      select
+                      fullWidth
+                      label="Account Type"
+                      value={accountType}
+                      onChange={(event) =>
+                        setAccountType(
+                          event.target.value
+                        )
+                      }
+                      disabled={submitting}
+                      required
+                      SelectProps={{
+                        native: true,
+                      }}
+                      sx={inputStyles}
+                    >
+                      <option value="SAVINGS">
+                        Savings Account
+                      </option>
+
+                      <option value="CURRENT">
+                        Current Account
+                      </option>
+                    </TextField>
+
+                    {/* ACCOUNT NUMBER */}
+
                     <TextField
                       fullWidth
                       label="Account Number"
@@ -981,6 +1051,8 @@ function Accounts() {
                       }}
                       sx={inputStyles}
                     />
+
+                    {/* CUSTOMER ID */}
 
                     <TextField
                       fullWidth
@@ -1012,6 +1084,8 @@ function Accounts() {
                       }}
                       sx={inputStyles}
                     />
+
+                    {/* OPENING BALANCE */}
 
                     <TextField
                       fullWidth
@@ -1054,6 +1128,7 @@ function Accounts() {
                           },
                       }}
                     />
+
                   </Box>
 
                   <Stack
@@ -1312,6 +1387,7 @@ function Accounts() {
           ================================================= */}
 
           <Stack spacing={2.5}>
+
             <Card
               sx={{
                 borderRadius: 3,
@@ -1436,6 +1512,7 @@ function Accounts() {
                 </Stack>
               </CardContent>
             </Card>
+
           </Stack>
         </Box>
       </Box>
@@ -1610,10 +1687,20 @@ function Accounts() {
         <DialogContent sx={{ p: 3 }}>
           {selectedAccount && (
             <Stack spacing={0}>
+
               <DetailRow
                 label="Account Number"
                 value={
                   selectedAccount.accountNumber
+                }
+              />
+
+              <DetailRow
+                label="Account Type"
+                value={
+                  getAccountType(
+                    selectedAccount
+                  )
                 }
               />
 
@@ -1654,6 +1741,7 @@ function Accounts() {
                   selectedAccount
                 )}
               />
+
             </Stack>
           )}
         </DialogContent>
@@ -1839,6 +1927,35 @@ function AccountRow({
           </Box>
         </Stack>
 
+        {/* ACCOUNT TYPE */}
+
+        <Box
+          sx={{
+            minWidth: {
+              md: 140,
+            },
+          }}
+        >
+          <Typography
+            variant="caption"
+            color="#667085"
+          >
+            ACCOUNT TYPE
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.2,
+              fontWeight: 800,
+              color: "#344054",
+            }}
+          >
+            {getAccountType(account)}
+          </Typography>
+        </Box>
+
+        {/* BALANCE */}
+
         <Box
           sx={{
             minWidth: {
@@ -1867,6 +1984,8 @@ function AccountRow({
             {formatCurrency(balance)}
           </Typography>
         </Box>
+
+        {/* CUSTOMER */}
 
         <Box
           sx={{
@@ -1904,9 +2023,17 @@ function AccountRow({
           </Typography>
         </Box>
 
+        {/* STATUS */}
+
         <Chip
           size="small"
-          label="ACTIVE"
+          label={
+            account.status
+              ? String(
+                  account.status
+                ).toUpperCase()
+              : "ACTIVE"
+          }
           icon={<CheckCircle />}
           sx={{
             alignSelf: {
@@ -1926,6 +2053,8 @@ function AccountRow({
             },
           }}
         />
+
+        {/* ACTIONS */}
 
         <Stack
           direction="row"

@@ -26,8 +26,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     public JwtAuthenticationFilter(
             JwtService jwtService,
-            UserRepository userRepository
-    ) {
+            UserRepository userRepository) {
+
         this.jwtService = jwtService;
         this.userRepository = userRepository;
     }
@@ -36,21 +36,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+            FilterChain filterChain)
+            throws ServletException, IOException {
+
+        /*
+         * Always allow CORS preflight to continue.
+         *
+         * Spring Security CORS processing will handle
+         * the actual CORS headers.
+         */
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String authorizationHeader =
                 request.getHeader("Authorization");
 
-                System.out.println("========== JWT FILTER ==========");
-System.out.println("REQUEST: " + request.getMethod() + " " + request.getRequestURI());
-System.out.println("AUTH HEADER EXISTS: " + (authorizationHeader != null));
-System.out.println("================================");
-
         /*
-         * No JWT → continue.
-         * Spring Security will decide whether the endpoint
-         * requires authentication.
+         * No JWT.
+         *
+         * This is allowed here.
+         * Spring Security will decide whether the
+         * requested endpoint requires authentication.
          */
         if (authorizationHeader == null
                 || !authorizationHeader.startsWith("Bearer ")) {
@@ -70,7 +78,7 @@ System.out.println("================================");
         try {
 
             /*
-             * Validate token first.
+             * Validate JWT signature and expiration.
              */
             if (!jwtService.isTokenValid(token)) {
 
@@ -81,7 +89,7 @@ System.out.println("================================");
             }
 
             /*
-             * Extract username from JWT.
+             * Get username from JWT.
              */
             String username =
                     jwtService.extractUsername(token);
@@ -95,9 +103,14 @@ System.out.println("================================");
             }
 
             /*
-             * Do not blindly trust the role from JWT.
+             * IMPORTANT:
              *
-             * Load the current user from database.
+             * Do not trust the role stored inside the JWT.
+             *
+             * Load the current user from the database.
+             * This means if an administrator changes a user's
+             * role in the database, the next request gets the
+             * current role.
              */
             User user = userRepository
                     .findByUsername(username)
@@ -112,8 +125,7 @@ System.out.println("================================");
             }
 
             /*
-             * If authentication is not already present,
-             * create Spring Security authentication.
+             * Don't overwrite an existing authentication.
              */
             if (SecurityContextHolder
                     .getContext()
@@ -130,9 +142,24 @@ System.out.println("================================");
                 }
 
                 String normalizedRole =
-                        role.startsWith("ROLE_")
-                                ? role.substring(5)
-                                : role;
+                        role.trim().toUpperCase();
+
+                if (normalizedRole.startsWith("ROLE_")) {
+                    normalizedRole =
+                            normalizedRole.substring(5);
+                }
+
+                /*
+                 * Only allow known application roles.
+                 */
+                if (!normalizedRole.equals("USER")
+                        && !normalizedRole.equals("ADMIN")) {
+
+                    SecurityContextHolder.clearContext();
+
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 SimpleGrantedAuthority authority =
                         new SimpleGrantedAuthority(
@@ -149,20 +176,14 @@ System.out.println("================================");
                 SecurityContextHolder
                         .getContext()
                         .setAuthentication(authentication);
-
-                System.out.println(
-                        "JWT AUTHENTICATED USER: "
-                                + user.getUsername()
-                );
-
-                System.out.println(
-                        "AUTHORITY: ROLE_"
-                                + normalizedRole
-                );
             }
 
         } catch (Exception e) {
 
+            /*
+             * Invalid JWT must never result in an
+             * authenticated request.
+             */
             SecurityContextHolder.clearContext();
 
             System.err.println(

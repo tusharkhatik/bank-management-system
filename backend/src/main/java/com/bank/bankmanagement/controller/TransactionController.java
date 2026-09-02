@@ -1,7 +1,7 @@
 package com.bank.bankmanagement.controller;
 
-import com.bank.bankmanagement.dto.TransactionResponse;
 import com.bank.bankmanagement.dto.TransactionPageResponse;
+import com.bank.bankmanagement.dto.TransactionResponse;
 import com.bank.bankmanagement.service.TransactionService;
 
 import org.springframework.data.domain.PageRequest;
@@ -17,20 +17,25 @@ public class TransactionController {
 
     private final TransactionService transactionService;
 
-    public TransactionController(TransactionService transactionService) {
+    public TransactionController(
+            TransactionService transactionService) {
+
         this.transactionService = transactionService;
     }
 
+
     // =========================================================
-    // USER - CURRENT USER TRANSACTIONS
+    // USER - OWN TRANSACTIONS
     // =========================================================
 
     @GetMapping("/my")
     @PreAuthorize("hasRole('USER')")
     public List<TransactionResponse> getMyTransactions() {
 
-        return transactionService.getTransactionsForCurrentUser();
+        return transactionService
+                .getTransactionsForCurrentUser();
     }
+
 
     // =========================================================
     // ADMIN - ALL TRANSACTIONS
@@ -40,11 +45,16 @@ public class TransactionController {
     @PreAuthorize("hasRole('ADMIN')")
     public List<TransactionResponse> getAllTransactions() {
 
-        return transactionService.getAllTransactions();
+        return transactionService
+                .getAllTransactions();
     }
 
+
     // =========================================================
-    // AUTHENTICATED USER - TRANSACTION BY ID
+    // TRANSACTION BY ID
+    //
+    // ADMIN -> any
+    // USER  -> own only
     // =========================================================
 
     @GetMapping("/{id}")
@@ -52,35 +62,47 @@ public class TransactionController {
     public TransactionResponse getTransactionById(
             @PathVariable Long id) {
 
-        return transactionService.getTransactionById(id);
+        return transactionService
+                .getTransactionById(id);
     }
+
 
     // =========================================================
     // ACCOUNT TRANSACTIONS
+    //
+    // ADMIN -> any account
+    // USER  -> own account
     // =========================================================
 
     @GetMapping("/account/{accountId}")
     @PreAuthorize("isAuthenticated()")
-    public List<TransactionResponse> getTransactionsByAccountId(
+    public List<TransactionResponse>
+    getTransactionsByAccountId(
             @PathVariable Long accountId) {
 
-        return transactionService.getAccountTransactions(accountId);
+        return transactionService
+                .getAccountTransactions(accountId);
     }
 
+
     // =========================================================
-    // PAGINATED - ADMIN
+    // ADMIN - PAGINATED
     // =========================================================
 
     @GetMapping("/page")
     @PreAuthorize("hasRole('ADMIN')")
-    public TransactionPageResponse getTransactionsPaginated(
+    public TransactionPageResponse
+    getTransactionsPaginated(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable =
+                PageRequest.of(page, size);
 
-        return transactionService.getTransactionsPaginated(pageable);
+        return transactionService
+                .getTransactionsPaginated(pageable);
     }
+
 
     // =========================================================
     // ACCOUNT PAGINATION
@@ -88,84 +110,103 @@ public class TransactionController {
 
     @GetMapping("/account/{accountId}/page")
     @PreAuthorize("isAuthenticated()")
-    public TransactionPageResponse getAccountTransactionsPaginated(
+    public TransactionPageResponse
+    getAccountTransactionsPaginated(
             @PathVariable Long accountId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable =
+                PageRequest.of(page, size);
 
-        return transactionService.getAccountTransactionsPaginated(
-                accountId,
-                pageable
-        );
+        return transactionService
+                .getAccountTransactionsPaginated(
+                        accountId,
+                        pageable
+                );
     }
 
+
     // =========================================================
-    // ADMIN - TRANSACTIONS BY TYPE
+    // ADMIN - TYPE
     // =========================================================
 
     @GetMapping("/type/{type}")
     @PreAuthorize("hasRole('ADMIN')")
-    public List<TransactionResponse> getTransactionsByType(
+    public List<TransactionResponse>
+    getTransactionsByType(
             @PathVariable String type) {
 
-        return transactionService.getTransactionsByType(type);
+        return transactionService
+                .getTransactionsByType(type);
     }
 
+
     // =========================================================
-    // ADMIN - PAGINATED BY TYPE
+    // ADMIN - TYPE PAGINATION
     // =========================================================
 
     @GetMapping("/type/{type}/page")
     @PreAuthorize("hasRole('ADMIN')")
-    public TransactionPageResponse getTransactionsByTypePaginated(
+    public TransactionPageResponse
+    getTransactionsByTypePaginated(
             @PathVariable String type,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable =
+                PageRequest.of(page, size);
 
-        return transactionService.getTransactionsByTypePaginated(
-                type,
-                pageable
-        );
+        return transactionService
+                .getTransactionsByTypePaginated(
+                        type,
+                        pageable
+                );
     }
 
+
     // =========================================================
-    // ACCOUNT TRANSACTIONS BY TYPE
+    // ACCOUNT + TYPE
     // =========================================================
 
     @GetMapping("/account/{accountId}/type/{type}")
     @PreAuthorize("isAuthenticated()")
-    public List<TransactionResponse> getAccountTransactionsByType(
+    public List<TransactionResponse>
+    getAccountTransactionsByType(
             @PathVariable Long accountId,
             @PathVariable String type) {
 
-        return transactionService.getAccountTransactionsByType(
-                accountId,
-                type
-        );
+        return transactionService
+                .getAccountTransactionsByType(
+                        accountId,
+                        type
+                );
     }
 
+
     // =========================================================
-    // ACCOUNT TRANSACTIONS BY TYPE - PAGINATED
+    // ACCOUNT + TYPE PAGINATION
     // =========================================================
 
-    @GetMapping("/account/{accountId}/type/{type}/page")
+    @GetMapping(
+            "/account/{accountId}/type/{type}/page"
+    )
     @PreAuthorize("isAuthenticated()")
-    public TransactionPageResponse getAccountTransactionsByTypePaginated(
+    public TransactionPageResponse
+    getAccountTransactionsByTypePaginated(
             @PathVariable Long accountId,
             @PathVariable String type,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable =
+                PageRequest.of(page, size);
 
-        return transactionService.getAccountTransactionsByTypePaginated(
-                accountId,
-                type,
-                pageable
-        );
+        return transactionService
+                .getAccountTransactionsByTypePaginated(
+                        accountId,
+                        type,
+                        pageable
+                );
     }
 }

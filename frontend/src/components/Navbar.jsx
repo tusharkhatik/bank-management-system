@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+
 import QrCode2OutlinedIcon from "@mui/icons-material/QrCode2Outlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 
@@ -28,98 +29,182 @@ import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import AdminPanelSettingsOutlinedIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 
+import "../App.css";
+
+function getCurrentUser() {
+  try {
+    return JSON.parse(
+      localStorage.getItem("user") || "null"
+    );
+  } catch {
+    return null;
+  }
+}
+
+function normalizeRole(role) {
+  return String(role || "")
+    .toUpperCase()
+    .replace("ROLE_", "");
+}
+
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const role = String(user?.role || "CUSTOMER").toUpperCase();
+  const user = getCurrentUser();
 
- const navigationItems = [
-  {
-    label: "Dashboard",
-    path: "/dashboard",
-    icon: <DashboardOutlinedIcon fontSize="small" />,
-  },
+  const role = normalizeRole(user?.role);
 
-  ...(role === "ADMIN"
-    ? [
-        {
-          label: "Customers",
-          path: "/customers",
-          icon: <PeopleIcon fontSize="small" />,
-        },
-        {
-          label: "Deposit",
-          path: "/deposit",
-          icon: <AddCircleIcon fontSize="small" />,
-        },
-        {
-          label: "Withdraw",
-          path: "/withdraw",
-          icon: <RemoveCircleIcon fontSize="small" />,
-        },
-      ]
-    : []),
+  const isAdmin = role === "ADMIN";
+  const isUser = role === "USER";
 
-  {
-    label: "Accounts",
-    path: "/accounts",
-    icon: <AccountBalanceOutlinedIcon fontSize="small" />,
-  },
+  /* =========================================================
+     NAVIGATION ITEMS
+  ========================================================= */
 
-  {
-    label: "Transfer",
-    path: "/transfer",
-    icon: <SwapHorizIcon fontSize="small" />,
-  },
+  const navigationItems = [];
 
-  {
-    label: "UPI",
-    path: "/upi",
-    icon: <PaymentsOutlinedIcon fontSize="small" />,
-  },
+  /* USER ONLY */
 
-  {
-    label: "Scan & Pay",
-    path: "/scan-pay",
-    icon: <QrCode2OutlinedIcon fontSize="small" />,
-  },
+  if (isUser) {
+    navigationItems.push({
+      label: "Dashboard",
+      path: "/dashboard",
+      icon: (
+        <DashboardOutlinedIcon fontSize="small" />
+      ),
+    });
+  }
 
-  {
-    label: "Transactions",
-    path: "/transactions",
-    icon: <ReceiptLongOutlinedIcon fontSize="small" />,
-  },
+  /* ADMIN ONLY */
 
-  ...(role === "ADMIN"
-    ? [
-        {
-          label: "Admin",
-          path: "/admin",
-          icon: (
-            <AdminPanelSettingsOutlinedIcon fontSize="small" />
-          ),
-        },
-      ]
-    : []),
-];
+  if (isAdmin) {
+    navigationItems.push({
+      label: "Customers",
+      path: "/customers",
+      icon: (
+        <PeopleIcon fontSize="small" />
+      ),
+    });
+  }
+
+  /* SHARED */
+
+  navigationItems.push(
+    {
+      label: "Accounts",
+      path: "/accounts",
+      icon: (
+        <AccountBalanceOutlinedIcon fontSize="small" />
+      ),
+    },
+    {
+      label: "Deposit",
+      path: "/deposit",
+      icon: (
+        <AddCircleIcon fontSize="small" />
+      ),
+    },
+    {
+      label: "Withdraw",
+      path: "/withdraw",
+      icon: (
+        <RemoveCircleIcon fontSize="small" />
+      ),
+    },
+    {
+      label: "Transfer",
+      path: "/transfer",
+      icon: (
+        <SwapHorizIcon fontSize="small" />
+      ),
+    },
+    {
+      label: "Transactions",
+      path: "/transactions",
+      icon: (
+        <ReceiptLongOutlinedIcon fontSize="small" />
+      ),
+    }
+  );
+
+  /* USER ONLY */
+
+  if (isUser) {
+    navigationItems.push(
+      {
+        label: "UPI",
+        path: "/upi",
+        icon: (
+          <PaymentsOutlinedIcon fontSize="small" />
+        ),
+      },
+      {
+        label: "Scan & Pay",
+        path: "/scan-pay",
+        icon: (
+          <QrCode2OutlinedIcon fontSize="small" />
+        ),
+      }
+    );
+  }
+
+  /* ADMIN ONLY */
+
+  if (isAdmin) {
+    navigationItems.push({
+      label: "Admin",
+      path: "/admin",
+      icon: (
+        <AdminPanelSettingsOutlinedIcon fontSize="small" />
+      ),
+    });
+  }
+
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("role");
 
     setMobileOpen(false);
 
-    navigate("/", { replace: true });
+    navigate("/", {
+      replace: true,
+    });
   };
 
-  const isActive = (path) => location.pathname === path;
+  /* =========================================================
+     ACTIVE ITEM
+  ========================================================= */
+
+  const isActive = (path) =>
+    location.pathname === path;
+
+  /* =========================================================
+     NAVIGATION
+  ========================================================= */
 
   const handleNavigation = (path) => {
     setMobileOpen(false);
     navigate(path);
+  };
+
+  /* =========================================================
+     BRAND DESTINATION
+  ========================================================= */
+
+  const handleBrandClick = () => {
+    if (isAdmin) {
+      navigate("/admin");
+    } else {
+      navigate("/dashboard");
+    }
   };
 
   return (
@@ -145,16 +230,20 @@ function Navbar() {
             gap: 2,
           }}
         >
+
           {/* BRAND */}
 
           <Box
-            onClick={() => navigate("/dashboard")}
+            onClick={handleBrandClick}
             sx={{
               display: "flex",
               alignItems: "center",
               gap: 1.2,
               cursor: "pointer",
-              mr: { xs: 0, lg: 2 },
+              mr: {
+                xs: 0,
+                lg: 2,
+              },
               flexShrink: 0,
             }}
           >
@@ -235,7 +324,9 @@ function Navbar() {
                   color: isActive(item.path)
                     ? "#2563eb"
                     : "#64748b",
-                  backgroundColor: isActive(item.path)
+                  backgroundColor: isActive(
+                    item.path
+                  )
                     ? "#eff6ff"
                     : "transparent",
                   "&:hover": {
@@ -280,13 +371,15 @@ function Navbar() {
                   mt: 0.3,
                 }}
               >
-                {role}
+                {role || "USER"}
               </Typography>
             </Box>
 
             <Button
               onClick={handleLogout}
-              startIcon={<LogoutOutlinedIcon />}
+              startIcon={
+                <LogoutOutlinedIcon />
+              }
               sx={{
                 minHeight: 40,
                 px: 1.5,
@@ -371,11 +464,16 @@ function Navbar() {
                   mt: 0.3,
                 }}
               >
-                {user?.username || "User"} · {role}
+                {user?.username || "User"} ·{" "}
+                {role || "USER"}
               </Typography>
             </Box>
 
-            <IconButton onClick={() => setMobileOpen(false)}>
+            <IconButton
+              onClick={() =>
+                setMobileOpen(false)
+              }
+            >
               <CloseIcon />
             </IconButton>
           </Box>
@@ -384,14 +482,18 @@ function Navbar() {
             {navigationItems.map((item) => (
               <ListItemButton
                 key={item.path}
-                onClick={() => handleNavigation(item.path)}
+                onClick={() =>
+                  handleNavigation(item.path)
+                }
                 sx={{
                   borderRadius: 2,
                   mb: 0.5,
                   color: isActive(item.path)
                     ? "#2563eb"
                     : "#475569",
-                  backgroundColor: isActive(item.path)
+                  backgroundColor: isActive(
+                    item.path
+                  )
                     ? "#eff6ff"
                     : "transparent",
                   "&:hover": {
@@ -403,7 +505,9 @@ function Navbar() {
                   sx={{
                     display: "flex",
                     mr: 1.5,
-                    color: isActive(item.path)
+                    color: isActive(
+                      item.path
+                    )
                       ? "#2563eb"
                       : "#64748b",
                   }}
@@ -414,7 +518,9 @@ function Navbar() {
                 <ListItemText
                   primary={item.label}
                   primaryTypographyProps={{
-                    fontWeight: isActive(item.path)
+                    fontWeight: isActive(
+                      item.path
+                    )
                       ? 700
                       : 500,
                   }}
@@ -430,7 +536,8 @@ function Navbar() {
               left: 0,
               right: 0,
               p: 2,
-              borderTop: "1px solid #e2e8f0",
+              borderTop:
+                "1px solid #e2e8f0",
               backgroundColor: "#ffffff",
             }}
           >
@@ -438,7 +545,9 @@ function Navbar() {
               fullWidth
               variant="outlined"
               color="error"
-              startIcon={<LogoutOutlinedIcon />}
+              startIcon={
+                <LogoutOutlinedIcon />
+              }
               onClick={handleLogout}
               sx={{
                 py: 1.2,

@@ -5,11 +5,13 @@ import com.bank.bankmanagement.dto.AccountResponse;
 import com.bank.bankmanagement.dto.AccountUpdateRequest;
 import com.bank.bankmanagement.dto.TransferRequest;
 import com.bank.bankmanagement.service.AccountService;
+import com.bank.bankmanagement.dto.ReceiverAccountResponse;
+
+import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import jakarta.validation.Valid;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -25,25 +27,25 @@ public class AccountController {
     }
 
     // =========================================================
-    // CREATE ACCOUNT - ADMIN ONLY
+    // CREATE ACCOUNT
+    // ADMIN ONLY
     // =========================================================
 
-   @PostMapping
-@PreAuthorize("hasRole('ADMIN')")
-public AccountResponse createAccount(
-        @Valid @RequestBody AccountRequest request) {  // ADD @Valid
-    
-    return accountService.createAccount(request);
-}
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public AccountResponse createAccount(
+            @Valid @RequestBody AccountRequest request) {
+
+        return accountService.createAccount(request);
+    }
 
     // =========================================================
     // GET ACCOUNTS
-    // =========================================================
     //
-    // ADMIN -> all accounts
-    // USER  -> only own accounts
+    // ADMIN -> ALL ACCOUNTS
+    // USER  -> OWN ACCOUNTS
     //
-    // AccountService handles the ownership filtering.
+    // AccountService decides what the user can see.
     // =========================================================
 
     @GetMapping
@@ -55,6 +57,9 @@ public AccountResponse createAccount(
 
     // =========================================================
     // GET ACCOUNT BY ID
+    //
+    // ADMIN -> ANY ACCOUNT
+    // USER  -> OWN ACCOUNT ONLY
     // =========================================================
 
     @GetMapping("/{id}")
@@ -69,6 +74,9 @@ public AccountResponse createAccount(
 
     // =========================================================
     // DEPOSIT
+    //
+    // USER  -> OWN ACCOUNT
+    // ADMIN -> Allowed according to service rules
     // =========================================================
 
     @PostMapping("/{id}/deposit")
@@ -95,33 +103,43 @@ public AccountResponse createAccount(
 
     // =========================================================
     // TRANSFER
+    //
+    // AccountService MUST verify that the sender account
+    // belongs to the authenticated user.
     // =========================================================
 
-   @PostMapping("/transfer")
-@PreAuthorize("isAuthenticated()")
-public ResponseEntity<String> transfer(
-        @Valid @RequestBody TransferRequest request) {  // ADD @Valid
-    
-    accountService.transfer(request);
-    
-    return ResponseEntity.ok("Transfer successful");
-}
+    @PostMapping("/transfer")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<String> transfer(
+            @Valid @RequestBody TransferRequest request) {
+
+        accountService.transfer(request);
+
+        return ResponseEntity.ok(
+                "Transfer successful"
+        );
+    }
 
     // =========================================================
-    // UPDATE ACCOUNT - ADMIN ONLY
+    // UPDATE ACCOUNT
+    // ADMIN ONLY
     // =========================================================
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public AccountResponse updateAccount(
             @PathVariable Long id,
-            @RequestBody AccountUpdateRequest request) {
+            @Valid @RequestBody AccountUpdateRequest request) {
 
-        return accountService.updateAccount(id, request);
+        return accountService.updateAccount(
+                id,
+                request
+        );
     }
 
     // =========================================================
-    // BLOCK ACCOUNT - ADMIN ONLY
+    // BLOCK ACCOUNT
+    // ADMIN ONLY
     // =========================================================
 
     @PatchMapping("/{id}/block")
@@ -133,7 +151,8 @@ public ResponseEntity<String> transfer(
     }
 
     // =========================================================
-    // UNBLOCK ACCOUNT - ADMIN ONLY
+    // UNBLOCK ACCOUNT
+    // ADMIN ONLY
     // =========================================================
 
     @PatchMapping("/{id}/unblock")
@@ -145,7 +164,8 @@ public ResponseEntity<String> transfer(
     }
 
     // =========================================================
-    // CLOSE ACCOUNT - ADMIN ONLY
+    // CLOSE ACCOUNT
+    // ADMIN ONLY
     // =========================================================
 
     @PatchMapping("/{id}/close")
@@ -157,7 +177,8 @@ public ResponseEntity<String> transfer(
     }
 
     // =========================================================
-    // DELETE ACCOUNT - ADMIN ONLY
+    // DELETE ACCOUNT
+    // ADMIN ONLY
     // =========================================================
 
     @DeleteMapping("/{id}")
@@ -169,4 +190,20 @@ public ResponseEntity<String> transfer(
 
         return ResponseEntity.noContent().build();
     }
+    // =========================================================
+// LOOKUP RECEIVER ACCOUNT
+//
+// USER can search for a specific receiver using
+// the exact account number.
+// =========================================================
+
+@GetMapping("/lookup")
+@PreAuthorize("isAuthenticated()")
+public ResponseEntity<ReceiverAccountResponse> lookupReceiver(
+        @RequestParam String accountNumber) {
+
+    return ResponseEntity.ok(
+            accountService.lookupReceiver(accountNumber)
+    );
+}
 }

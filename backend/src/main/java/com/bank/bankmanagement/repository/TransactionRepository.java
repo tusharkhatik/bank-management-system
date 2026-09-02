@@ -1,6 +1,7 @@
 package com.bank.bankmanagement.repository;
 
 import com.bank.bankmanagement.model.Transaction;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,14 +11,15 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+public interface TransactionRepository
+        extends JpaRepository<Transaction, Long> {
 
     // =========================================================
     // ADMIN - ALL TRANSACTIONS
     // =========================================================
 
     @Query("""
-            SELECT DISTINCT t
+            SELECT t
             FROM Transaction t
             LEFT JOIN FETCH t.fromAccount
             LEFT JOIN FETCH t.toAccount
@@ -28,11 +30,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     // =========================================================
     // USER - OWN TRANSACTIONS
-    //
-    // A transaction belongs to the user when either:
-    // fromAccount.customer.user.username = username
-    // OR
-    // toAccount.customer.user.username = username
     // =========================================================
 
     @Query("""
@@ -40,8 +37,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             FROM Transaction t
             LEFT JOIN FETCH t.fromAccount fa
             LEFT JOIN FETCH t.toAccount ta
-            WHERE fa.customer.user.username = :username
-               OR ta.customer.user.username = :username
+            LEFT JOIN fa.customer fc
+            LEFT JOIN fc.user fu
+            LEFT JOIN ta.customer tc
+            LEFT JOIN tc.user tu
+            WHERE fu.username = :username
+               OR tu.username = :username
             ORDER BY t.timestamp DESC
             """)
     List<Transaction> findByOwnerUsernameWithAccounts(
@@ -50,11 +51,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
 
     // =========================================================
-    // GET TRANSACTION BY ID
+    // ADMIN - TRANSACTION BY ID
     // =========================================================
 
     @Query("""
-            SELECT DISTINCT t
+            SELECT t
             FROM Transaction t
             LEFT JOIN FETCH t.fromAccount
             LEFT JOIN FETCH t.toAccount
@@ -66,11 +67,36 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
 
     // =========================================================
-    // ACCOUNT TRANSACTIONS
+    // USER - TRANSACTION BY ID
     // =========================================================
 
     @Query("""
             SELECT DISTINCT t
+            FROM Transaction t
+            LEFT JOIN FETCH t.fromAccount fa
+            LEFT JOIN FETCH t.toAccount ta
+            LEFT JOIN fa.customer fc
+            LEFT JOIN fc.user fu
+            LEFT JOIN ta.customer tc
+            LEFT JOIN tc.user tu
+            WHERE t.id = :transactionId
+              AND (
+                    fu.username = :username
+                    OR tu.username = :username
+                  )
+            """)
+    Optional<Transaction> findByIdAndOwnerUsername(
+            @Param("transactionId") Long transactionId,
+            @Param("username") String username
+    );
+
+
+    // =========================================================
+    // ACCOUNT TRANSACTIONS
+    // =========================================================
+
+    @Query("""
+            SELECT t
             FROM Transaction t
             LEFT JOIN FETCH t.fromAccount
             LEFT JOIN FETCH t.toAccount
@@ -84,11 +110,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
 
     // =========================================================
-    // TRANSACTIONS BY TYPE
+    // TRANSACTIONS BY TYPE - ADMIN
     // =========================================================
 
     @Query("""
-            SELECT DISTINCT t
+            SELECT t
             FROM Transaction t
             LEFT JOIN FETCH t.fromAccount
             LEFT JOIN FETCH t.toAccount
@@ -105,12 +131,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     // =========================================================
 
     @Query("""
-            SELECT DISTINCT t
+            SELECT t
             FROM Transaction t
             LEFT JOIN FETCH t.fromAccount
             LEFT JOIN FETCH t.toAccount
-            WHERE (t.fromAccount.id = :accountId
-               OR t.toAccount.id = :accountId)
+            WHERE (
+                    t.fromAccount.id = :accountId
+                    OR t.toAccount.id = :accountId
+                  )
               AND t.type = :type
             ORDER BY t.timestamp DESC
             """)
@@ -150,8 +178,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                     FROM Transaction t
                     LEFT JOIN FETCH t.fromAccount
                     LEFT JOIN FETCH t.toAccount
-                    WHERE (t.fromAccount.id = :accountId
-                       OR t.toAccount.id = :accountId)
+                    WHERE t.fromAccount.id = :accountId
+                       OR t.toAccount.id = :accountId
                     ORDER BY t.timestamp DESC
                     """,
             countQuery = """
@@ -202,16 +230,20 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                     FROM Transaction t
                     LEFT JOIN FETCH t.fromAccount
                     LEFT JOIN FETCH t.toAccount
-                    WHERE (t.fromAccount.id = :accountId
-                       OR t.toAccount.id = :accountId)
+                    WHERE (
+                            t.fromAccount.id = :accountId
+                            OR t.toAccount.id = :accountId
+                          )
                       AND t.type = :type
                     ORDER BY t.timestamp DESC
                     """,
             countQuery = """
                     SELECT COUNT(t)
                     FROM Transaction t
-                    WHERE (t.fromAccount.id = :accountId
-                       OR t.toAccount.id = :accountId)
+                    WHERE (
+                            t.fromAccount.id = :accountId
+                            OR t.toAccount.id = :accountId
+                          )
                       AND t.type = :type
                     """
     )

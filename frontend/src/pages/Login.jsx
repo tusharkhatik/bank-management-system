@@ -36,17 +36,33 @@ export default function Login() {
 
   const passwordRef = useRef(null);
 
+  /* =========================================================
+     MODE
+  ========================================================= */
+
+  const [isSignUp, setIsSignUp] = useState(false);
+
+  /* =========================================================
+     FORM
+  ========================================================= */
+
   const [form, setForm] = useState({
     username: "",
     password: "",
+    confirmPassword: "",
     role: "USER",
   });
 
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberUsername, setRememberUsername] = useState(true);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+
+  const [rememberUsername, setRememberUsername] =
+    useState(true);
 
   const [loading, setLoading] = useState(false);
-  const [forgotPassword, setForgotPassword] = useState(false);
+  const [forgotPassword, setForgotPassword] =
+    useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -54,6 +70,7 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState({
     username: "",
     password: "",
+    confirmPassword: "",
     role: "",
   });
 
@@ -99,7 +116,7 @@ export default function Login() {
   ========================================================= */
 
   const handleRoleChange = (role) => {
-    if (loading) {
+    if (loading || isSignUp) {
       return;
     }
 
@@ -118,21 +135,52 @@ export default function Login() {
   };
 
   /* =========================================================
+     SWITCH LOGIN / SIGNUP
+  ========================================================= */
+
+  const switchMode = () => {
+    if (loading) {
+      return;
+    }
+
+    setIsSignUp((previous) => !previous);
+
+    setError("");
+    setSuccess("");
+
+    setFieldErrors({
+      username: "",
+      password: "",
+      confirmPassword: "",
+      role: "",
+    });
+
+    setForm((previous) => ({
+      ...previous,
+      password: "",
+      confirmPassword: "",
+      role: "USER",
+    }));
+  };
+
+  /* =========================================================
      VALIDATION
   ========================================================= */
 
   const validateForm = () => {
     const username = form.username.trim();
     const password = form.password;
+    const confirmPassword = form.confirmPassword;
     const role = form.role;
 
     const errors = {
       username: "",
       password: "",
+      confirmPassword: "",
       role: "",
     };
 
-    if (!role) {
+    if (!isSignUp && !role) {
       errors.role = "Please select account type.";
     }
 
@@ -150,17 +198,270 @@ export default function Login() {
         "Password must contain at least 6 characters.";
     }
 
+    if (isSignUp) {
+      if (!confirmPassword) {
+        errors.confirmPassword =
+          "Please confirm your password.";
+      } else if (password !== confirmPassword) {
+        errors.confirmPassword =
+          "Passwords do not match.";
+      }
+    }
+
     setFieldErrors(errors);
 
     return (
       !errors.username &&
       !errors.password &&
+      !errors.confirmPassword &&
       !errors.role
     );
   };
 
   /* =========================================================
+     NORMALIZE ROLE
+  ========================================================= */
+
+  const normalizeRole = (role) => {
+    return String(role || "")
+      .trim()
+      .toUpperCase()
+      .replace(/^ROLE_/, "");
+  };
+
+  /* =========================================================
      LOGIN
+  ========================================================= */
+
+  const handleLogin = async () => {
+    const username = form.username.trim();
+
+    try {
+      setLoading(true);
+      setError("");
+      setSuccess("");
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("role");
+
+      const response = await api.post("/auth/login", {
+        username,
+        password: form.password,
+        role: form.role,
+      });
+
+      const data = response?.data;
+
+      const token =
+        data?.token ||
+        data?.accessToken ||
+        data?.jwt ||
+        data?.access_token;
+
+      if (!token) {
+        throw new Error(
+          "Authentication token was not returned by the server."
+        );
+      }
+
+      const returnedRole =
+        data?.role ||
+        data?.user?.role ||
+        form.role;
+
+      const normalizedRole =
+        normalizeRole(returnedRole);
+
+      if (
+        normalizedRole !== "ADMIN" &&
+        normalizedRole !== "USER"
+      ) {
+        throw new Error(
+          "Invalid account role returned by the server."
+        );
+      }
+
+      localStorage.setItem("token", token);
+
+      if (rememberUsername) {
+        localStorage.setItem(
+          "rememberedUsername",
+          username
+        );
+      } else {
+        localStorage.removeItem(
+          "rememberedUsername"
+        );
+      }
+
+      const user = {
+        username:
+          data?.username ||
+          data?.user?.username ||
+          username,
+        role: normalizedRole,
+      };
+
+      localStorage.setItem(
+        "user",
+        JSON.stringify(user)
+      );
+
+      setForm((previous) => ({
+        ...previous,
+        password: "",
+        confirmPassword: "",
+      }));
+
+      setFieldErrors({
+        username: "",
+        password: "",
+        confirmPassword: "",
+        role: "",
+      });
+
+      if (normalizedRole === "ADMIN") {
+        navigate("/admin", {
+          replace: true,
+        });
+      } else {
+        navigate("/dashboard", {
+          replace: true,
+        });
+      }
+    } catch (err) {
+      console.error("Login failed:", err);
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("role");
+
+      const status = err?.response?.status;
+
+      let message =
+        "Login failed. Please check your credentials.";
+
+      if (status === 401) {
+        message =
+          "Invalid username or password.";
+      } else if (status === 403) {
+        message =
+          "Access denied. Your account may not have permission to log in.";
+      } else if (status === 400) {
+        message =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Invalid login request.";
+      } else if (!err?.response) {
+        message =
+          "Unable to connect to the banking server. Please check that the backend is running.";
+      } else {
+        const serverMessage =
+          err?.response?.data?.message ||
+          err?.response?.data?.error;
+
+        if (typeof serverMessage === "string") {
+          message = serverMessage;
+        }
+      }
+
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* =========================================================
+     SIGN UP
+  ========================================================= */
+
+  const handleSignUp = async () => {
+    const username = form.username.trim();
+
+    try {
+      setLoading(true);
+      setError("");
+      setSuccess("");
+
+      /*
+       * IMPORTANT:
+       * Do NOT send role from the frontend.
+       *
+       * Backend registration should always
+       * create a USER account.
+       */
+
+      await api.post("/auth/register", {
+        username,
+        password: form.password,
+      });
+
+      setSuccess(
+        "Account created successfully. You can now sign in."
+      );
+
+      setForm({
+        username,
+        password: "",
+        confirmPassword: "",
+        role: "USER",
+      });
+
+      setFieldErrors({
+        username: "",
+        password: "",
+        confirmPassword: "",
+        role: "",
+      });
+
+      /*
+       * Automatically switch back to Sign In
+       * after successful registration.
+       */
+      setTimeout(() => {
+        setIsSignUp(false);
+        setSuccess(
+          "Registration successful. Please sign in."
+        );
+      }, 1200);
+    } catch (err) {
+      console.error("Registration failed:", err);
+
+      const status = err?.response?.status;
+
+      let message =
+        "Registration failed. Please try again.";
+
+      if (status === 400) {
+        message =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Invalid registration details.";
+      } else if (status === 409) {
+        message =
+          "Username already exists. Please choose another username.";
+      } else if (!err?.response) {
+        message =
+          "Unable to connect to the banking server. Please check that the backend is running.";
+      } else {
+        const serverMessage =
+          err?.response?.data?.message ||
+          err?.response?.data?.error;
+
+        if (typeof serverMessage === "string") {
+          message = serverMessage;
+        }
+      }
+
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* =========================================================
+     SUBMIT
   ========================================================= */
 
   const handleSubmit = async (event) => {
@@ -174,150 +475,10 @@ export default function Login() {
       return;
     }
 
-    const username = form.username.trim();
-
-    try {
-      setLoading(true);
-      setError("");
-      setSuccess("");
-
-      /*
-       * Remove stale authentication data before
-       * starting a fresh login.
-       */
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-
-      /*
-       * IMPORTANT:
-       * Send the selected role to the backend.
-       */
-      const response = await api.post("/auth/login", {
-        username,
-        password: form.password,
-        role: form.role,
-      });
-
-      const data = response?.data;
-
-      /*
-       * Support multiple possible backend response names.
-       */
-      const token =
-        data?.token ||
-        data?.accessToken ||
-        data?.jwt ||
-        data?.access_token;
-
-      if (!token) {
-        throw new Error(
-          "Authentication token was not returned by the server."
-        );
-      }
-
-      /* =====================================================
-         SAVE TOKEN
-      ===================================================== */
-
-      localStorage.setItem("token", token);
-
-      /* =====================================================
-         SAVE USERNAME
-      ===================================================== */
-
-      if (rememberUsername) {
-        localStorage.setItem(
-          "rememberedUsername",
-          username
-        );
-      } else {
-        localStorage.removeItem("rememberedUsername");
-      }
-
-      /* =====================================================
-         USER INFORMATION
-      ===================================================== */
-
-      const returnedRole =
-        data?.role ||
-        data?.user?.role ||
-        form.role;
-
-      const user = {
-        username:
-          data?.username ||
-          data?.user?.username ||
-          username,
-
-        role: returnedRole,
-      };
-
-      localStorage.setItem(
-        "user",
-        JSON.stringify(user)
-      );
-
-      /*
-       * Clear password from React state.
-       */
-      setForm((previous) => ({
-        ...previous,
-        password: "",
-      }));
-
-      /*
-       * Navigate to dashboard.
-       */
-      navigate("/dashboard", {
-        replace: true,
-      });
-
-    } catch (err) {
-      console.error("Login failed:", err);
-
-      /*
-       * Remove potentially invalid authentication data.
-       */
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-
-      const status = err?.response?.status;
-
-      let message =
-        "Login failed. Please check your credentials.";
-
-      if (status === 401) {
-        message =
-          "Invalid username or password.";
-
-      } else if (status === 403) {
-        message =
-          "Access denied. Your account may not have permission to log in.";
-
-      } else if (status === 400) {
-        message =
-          err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Invalid login request.";
-
-      } else if (!err?.response) {
-        message =
-          "Unable to connect to the banking server. Please check that the backend is running.";
-
-      } else {
-        const serverMessage =
-          err?.response?.data?.message ||
-          err?.response?.data?.error;
-
-        if (typeof serverMessage === "string") {
-          message = serverMessage;
-        }
-      }
-
-      setError(message);
-
-    } finally {
-      setLoading(false);
+    if (isSignUp) {
+      await handleSignUp();
+    } else {
+      await handleLogin();
     }
   };
 
@@ -345,6 +506,10 @@ export default function Login() {
 
   const togglePasswordVisibility = () => {
     setShowPassword((previous) => !previous);
+  };
+
+  const toggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword((previous) => !previous);
   };
 
   /* =========================================================
@@ -450,6 +615,7 @@ export default function Login() {
               event.preventDefault();
 
               setError("");
+
               setSuccess(
                 "Password reset functionality will be connected to the backend next."
               );
@@ -546,19 +712,19 @@ export default function Login() {
   }
 
   /* =========================================================
-     LOGIN SCREEN
+     LOGIN / SIGNUP SCREEN
   ========================================================= */
 
   return (
     <Box className="login-page">
 
-      {/* Background decoration */}
+      {/* BACKGROUND */}
 
       <Box className="login-background-shape login-shape-one" />
 
       <Box className="login-background-shape login-shape-two" />
 
-      {/* Login Card */}
+      {/* CARD */}
 
       <Paper
         elevation={0}
@@ -593,14 +759,33 @@ export default function Login() {
         <Box className="login-heading">
 
           <Typography className="login-title">
-            Welcome back
+            {isSignUp
+              ? "Create your account"
+              : "Welcome back"}
           </Typography>
 
           <Typography className="login-description">
-            Sign in to securely access your banking dashboard.
+            {isSignUp
+              ? "Create a secure account to access your banking services."
+              : "Sign in to securely access your banking dashboard."}
           </Typography>
 
         </Box>
+
+        {/* =================================================
+            SUCCESS
+        ================================================= */}
+
+        {success && (
+          <Alert
+            severity="success"
+            className="login-alert"
+            onClose={() => setSuccess("")}
+            sx={{ mb: 2 }}
+          >
+            {success}
+          </Alert>
+        )}
 
         {/* =================================================
             ERROR
@@ -619,93 +804,114 @@ export default function Login() {
 
         {/* =================================================
             ACCOUNT TYPE
+            ONLY FOR SIGN IN
         ================================================= */}
 
-        <Box sx={{ mb: 2.5 }}>
+        {!isSignUp && (
+          <Box sx={{ mb: 2.5 }}>
 
-          <Typography
-            sx={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: "#475569",
-              mb: 1,
-            }}
-          >
-            Sign in as
-          </Typography>
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 1.5,
-            }}
-          >
-
-            {/* USER */}
-
-            <Button
-              type="button"
-              disabled={loading}
-              onClick={() =>
-                handleRoleChange("USER")
-              }
-              variant={
-                form.role === "USER"
-                  ? "contained"
-                  : "outlined"
-              }
-              startIcon={<PersonOutlineRounded />}
-              sx={{
-                minHeight: 48,
-                textTransform: "none",
-                fontWeight: 700,
-                borderRadius: 2,
-              }}
-            >
-              User
-            </Button>
-
-            {/* ADMIN */}
-
-            <Button
-              type="button"
-              disabled={loading}
-              onClick={() =>
-                handleRoleChange("ADMIN")
-              }
-              variant={
-                form.role === "ADMIN"
-                  ? "contained"
-                  : "outlined"
-              }
-              startIcon={<AdminPanelSettingsRounded />}
-              sx={{
-                minHeight: 48,
-                textTransform: "none",
-                fontWeight: 700,
-                borderRadius: 2,
-              }}
-            >
-              Admin
-            </Button>
-
-          </Box>
-
-          {fieldErrors.role && (
             <Typography
               sx={{
-                color: "error.main",
-                fontSize: 12,
-                mt: 0.75,
-                ml: 1.5,
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#475569",
+                mb: 1,
               }}
             >
-              {fieldErrors.role}
+              Sign in as
             </Typography>
-          )}
 
-        </Box>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 1.5,
+              }}
+            >
+
+              {/* USER */}
+
+              <Button
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  handleRoleChange("USER")
+                }
+                variant={
+                  form.role === "USER"
+                    ? "contained"
+                    : "outlined"
+                }
+                startIcon={<PersonOutlineRounded />}
+                sx={{
+                  minHeight: 48,
+                  textTransform: "none",
+                  fontWeight: 700,
+                  borderRadius: 2,
+                }}
+              >
+                User
+              </Button>
+
+              {/* ADMIN */}
+
+              <Button
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  handleRoleChange("ADMIN")
+                }
+                variant={
+                  form.role === "ADMIN"
+                    ? "contained"
+                    : "outlined"
+                }
+                startIcon={
+                  <AdminPanelSettingsRounded />
+                }
+                sx={{
+                  minHeight: 48,
+                  textTransform: "none",
+                  fontWeight: 700,
+                  borderRadius: 2,
+                }}
+              >
+                Admin
+              </Button>
+
+            </Box>
+
+            {fieldErrors.role && (
+              <Typography
+                sx={{
+                  color: "error.main",
+                  fontSize: 12,
+                  mt: 0.75,
+                  ml: 1.5,
+                }}
+              >
+                {fieldErrors.role}
+              </Typography>
+            )}
+
+          </Box>
+        )}
+
+        {/* =================================================
+            SIGN UP INFO
+        ================================================= */}
+
+        {isSignUp && (
+          <Alert
+            severity="info"
+            sx={{
+              mb: 2,
+              borderRadius: 2,
+            }}
+          >
+            New accounts are registered as User accounts.
+          </Alert>
+        )}
 
         {/* =================================================
             FORM
@@ -775,7 +981,11 @@ export default function Login() {
             }
             value={form.password}
             onChange={handleChange}
-            autoComplete="current-password"
+            autoComplete={
+              isSignUp
+                ? "new-password"
+                : "current-password"
+            }
             disabled={loading}
             placeholder="Enter your password"
             className="login-input"
@@ -820,62 +1030,127 @@ export default function Login() {
             }}
           />
 
+          {/* CONFIRM PASSWORD */}
+
+          {isSignUp && (
+            <TextField
+              fullWidth
+              label="Confirm password"
+              name="confirmPassword"
+              type={
+                showConfirmPassword
+                  ? "text"
+                  : "password"
+              }
+              value={form.confirmPassword}
+              onChange={handleChange}
+              autoComplete="new-password"
+              disabled={loading}
+              placeholder="Re-enter your password"
+              className="login-input"
+              error={Boolean(
+                fieldErrors.confirmPassword
+              )}
+              helperText={
+                fieldErrors.confirmPassword
+              }
+              slotProps={{
+                input: {
+
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LockRounded className="login-input-icon" />
+                    </InputAdornment>
+                  ),
+
+                  endAdornment: (
+                    <InputAdornment position="end">
+
+                      <IconButton
+                        onClick={
+                          toggleConfirmPasswordVisibility
+                        }
+                        edge="end"
+                        disabled={loading}
+                        aria-label={
+                          showConfirmPassword
+                            ? "Hide password"
+                            : "Show password"
+                        }
+                      >
+                        {showConfirmPassword ? (
+                          <VisibilityOff />
+                        ) : (
+                          <Visibility />
+                        )}
+                      </IconButton>
+
+                    </InputAdornment>
+                  ),
+
+                },
+              }}
+            />
+          )}
+
           {/* REMEMBER + FORGOT */}
 
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              mt: -0.5,
-              mb: 1,
-            }}
-          >
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={rememberUsername}
-                  onChange={(event) =>
-                    setRememberUsername(
-                      event.target.checked
-                    )
-                  }
-                  disabled={loading}
-                  size="small"
-                />
-              }
-              label={
-                <Typography
-                  sx={{
-                    fontSize: 13,
-                    color: "#64748b",
-                  }}
-                >
-                  Remember username
-                </Typography>
-              }
-            />
-
-            <Button
-              type="button"
-              variant="text"
-              onClick={handleForgotPassword}
-              disabled={loading}
+          {!isSignUp && (
+            <Box
               sx={{
-                textTransform: "none",
-                fontSize: 13,
-                fontWeight: 600,
-                minWidth: "auto",
-                px: 0.5,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mt: -0.5,
+                mb: 1,
               }}
             >
-              Forgot password?
-            </Button>
 
-          </Box>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={rememberUsername}
+                    onChange={(event) =>
+                      setRememberUsername(
+                        event.target.checked
+                      )
+                    }
+                    disabled={loading}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      color: "#64748b",
+                    }}
+                  >
+                    Remember username
+                  </Typography>
+                }
+              />
 
-          {/* LOGIN BUTTON */}
+              <Button
+                type="button"
+                variant="text"
+                onClick={handleForgotPassword}
+                disabled={loading}
+                sx={{
+                  textTransform: "none",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  minWidth: "auto",
+                  px: 0.5,
+                }}
+              >
+                Forgot password?
+              </Button>
+
+            </Box>
+          )}
+
+          {/* SUBMIT BUTTON */}
 
           <Button
             type="submit"
@@ -900,12 +1175,59 @@ export default function Login() {
                   sx={{ mr: 1 }}
                 />
 
-                Signing in...
+                {isSignUp
+                  ? "Creating account..."
+                  : "Signing in..."}
               </>
             ) : (
-              "Sign in"
+              isSignUp
+                ? "Create account"
+                : "Sign in"
             )}
 
+          </Button>
+
+        </Box>
+
+        {/* =================================================
+            SWITCH SIGN IN / SIGN UP
+        ================================================= */}
+
+        <Box
+          sx={{
+            textAlign: "center",
+            mt: 2.5,
+          }}
+        >
+
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 13,
+              color: "#64748b",
+            }}
+          >
+            {isSignUp
+              ? "Already have an account?"
+              : "Don't have an account?"}
+          </Typography>
+
+          <Button
+            type="button"
+            onClick={switchMode}
+            disabled={loading}
+            sx={{
+              ml: 0.5,
+              p: 0,
+              minWidth: "auto",
+              textTransform: "none",
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
+            {isSignUp
+              ? "Sign in"
+              : "Sign up"}
           </Button>
 
         </Box>

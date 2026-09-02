@@ -1,12 +1,12 @@
-
-import { useMemo, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
 import {
   AccountBalance,
+  AccountBalanceWallet,
   CheckCircle,
+  Close,
   ContentCopy,
   Download,
-  Error as ErrorIcon,
+  Error,
   History,
   InfoOutlined,
   Lock,
@@ -17,6 +17,7 @@ import {
   TrendingUp,
   VerifiedUser,
 } from "@mui/icons-material";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 
 import {
   Alert,
@@ -148,6 +149,30 @@ const getErrorMessage = (error) => {
 };
 
 /* =========================================================
+   FORMAT TRANSACTION DATE
+========================================================= */
+
+const formatTransactionDate = (timestamp) => {
+  if (!timestamp) {
+    return "Date unavailable";
+  }
+
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Date unavailable";
+  }
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+/* =========================================================
    DEPOSIT
 ========================================================= */
 
@@ -177,6 +202,13 @@ function Deposit() {
   });
 
   const [showLimits, setShowLimits] = useState(false);
+
+  /* =======================================================
+     TRANSACTION HISTORY
+  ======================================================= */
+
+  const [recentDeposits, setRecentDeposits] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   /* =======================================================
      CONSTANTS
@@ -216,24 +248,73 @@ function Deposit() {
   };
 
   /* =======================================================
+     LOAD RECENT TRANSACTIONS
+  ======================================================= */
+
+  const loadRecentDeposits = async () => {
+    try {
+      setHistoryLoading(true);
+
+      const response = await api.get("/transactions/my");
+
+      const transactions = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.data?.content)
+        ? response.data.content
+        : [];
+
+      const deposits = transactions
+        .filter((transaction) => {
+          const type = String(
+            transaction?.type || ""
+          ).toUpperCase();
+
+          return type === "DEPOSIT";
+        })
+        .sort((a, b) => {
+          return (
+            new Date(b?.timestamp || 0) -
+            new Date(a?.timestamp || 0)
+          );
+        })
+        .slice(0, 3);
+
+      setRecentDeposits(deposits);
+    } catch (error) {
+      console.error(
+        "Unable to load recent deposits:",
+        error
+      );
+
+      setRecentDeposits([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  /* =======================================================
+     LOAD HISTORY WHEN PAGE OPENS
+  ======================================================= */
+
+  useEffect(() => {
+    loadRecentDeposits();
+  }, []);
+
+  /* =======================================================
      ACCOUNT INPUT
   ======================================================= */
 
   const handleAccountChange = (event) => {
     const value = event.target.value;
 
-    /*
-     * Account ID should contain digits only.
-     */
+    // Account ID should contain digits only.
     if (!/^\d*$/.test(value)) {
       return;
     }
 
     setAccountId(value);
 
-    /*
-     * Changing account invalidates previous verification.
-     */
+    // Changing account invalidates previous verification.
     setAccountVerified(false);
     setAccountInfo(null);
 
@@ -252,13 +333,15 @@ function Deposit() {
     const value = event.target.value;
 
     /*
-     * Allows:
-     * 100
-     * 100.5
-     * 100.50
-     * 0.50
-     */
-    if (!/^\d*(\.\d{0,2})?$/.test(value)) {
+      Allows:
+
+      100
+      100.5
+      100.50
+      0.50
+    */
+
+    if (!/^\d*\.?\d{0,2}$/.test(value)) {
       return;
     }
 
@@ -353,26 +436,19 @@ function Deposit() {
       }));
 
       /*
-       * REAL BACKEND CALL
-       *
-       * AccountController:
-       *
-       * GET /api/accounts/{id}
-       *
-       * @PreAuthorize("isAuthenticated()")
-       */
+        REAL BACKEND CALL
+
+        GET /api/accounts/{id}
+      */
+
       const response = await api.get(
         `/accounts/${accountId}`
       );
 
       const data = response?.data;
 
-      /*
-       * If backend successfully returns the account,
-       * mark it as verified.
-       */
+      // Backend successfully returned the account.
       setAccountInfo(data);
-
       setAccountVerified(true);
 
       showToast(
@@ -411,10 +487,11 @@ function Deposit() {
     }
 
     /*
-     * Do NOT automatically mark an account as verified.
-     *
-     * The account must be verified against the backend.
-     */
+      Do NOT automatically mark the account as verified.
+
+      The account must be verified against the backend.
+    */
+
     if (!accountVerified) {
       await handleVerifyAccount();
       return;
@@ -443,10 +520,11 @@ function Deposit() {
       }));
 
       /*
-       * REAL BACKEND ENDPOINT
-       *
-       * POST /api/accounts/{id}/deposit?amount={amount}
-       */
+        REAL BACKEND ENDPOINT
+
+        POST /api/accounts/{id}/deposit?amount={amount}
+      */
+
       const response = await api.post(
         `/accounts/${accountId}/deposit`,
         null,
@@ -459,24 +537,22 @@ function Deposit() {
 
       const data = response?.data;
 
-      console.log(
-        "Deposit response:",
-        data
-      );
+      console.log("Deposit response:", data);
 
       const responseBalance =
         getResponseBalance(data);
 
       /*
-       * Your current AccountController returns
-       * AccountResponse from the deposit endpoint.
-       *
-       * Therefore transactionId may not exist in
-       * AccountResponse.
-       *
-       * We keep support for it if your backend later
-       * adds transaction information.
-       */
+        Your current AccountController returns
+        AccountResponse from the deposit endpoint.
+
+        Therefore transactionId may not exist in
+        AccountResponse.
+
+        We keep support for it if your backend later
+        adds transaction information.
+      */
+
       const transactionId =
         data?.transactionId ||
         data?.transaction?.id ||
@@ -499,7 +575,6 @@ function Deposit() {
       };
 
       setResult(receipt);
-
       setReceiptOpen(true);
 
       showToast(
@@ -508,18 +583,20 @@ function Deposit() {
       );
 
       /*
-       * Clear form after successful transaction.
-       */
+        Refresh transaction history immediately
+        after successful deposit.
+      */
+
+      await loadRecentDeposits();
+
+      // Clear form after successful transaction.
       setAccountId("");
       setAmount("");
       setAccountVerified(false);
       setAccountInfo(null);
       setErrors({});
     } catch (error) {
-      console.error(
-        "Deposit failed:",
-        error
-      );
+      console.error("Deposit failed:", error);
 
       const message = getErrorMessage(error);
 
@@ -598,6 +675,7 @@ function Deposit() {
 
     receiptWindow.document.write(`
       <!DOCTYPE html>
+
       <html>
       <head>
         <title>Deposit Receipt</title>
@@ -1082,9 +1160,7 @@ function Deposit() {
                 </Button>
               </Box>
 
-              {/* =================================================
-                  VERIFIED ACCOUNT
-              ================================================= */}
+              {/* VERIFIED ACCOUNT */}
 
               <Collapse in={accountVerified}>
                 <Paper
@@ -1125,9 +1201,8 @@ function Deposit() {
                         variant="caption"
                         color="#475467"
                       >
-                        Account ID{" "}
-                        {accountId}{" "}
-                        is ready for the deposit request.
+                        Account ID {accountId} is ready
+                        for the deposit request.
                       </Typography>
                     </Box>
 
@@ -1200,7 +1275,6 @@ function Deposit() {
                   }}
                   sx={{
                     ...inputStyles,
-
                     "& .MuiInputBase-input": {
                       fontSize: {
                         xs: "1.15rem",
@@ -1247,7 +1321,6 @@ function Deposit() {
                       height: 7,
                       borderRadius: 10,
                       bgcolor: "#eaecf0",
-
                       "& .MuiLinearProgress-bar": {
                         borderRadius: 10,
                         bgcolor:
@@ -1308,22 +1381,18 @@ function Deposit() {
                           borderRadius: 2,
                           textTransform: "none",
                           fontWeight: 750,
-
                           borderColor:
                             numericAmount === value
                               ? "#12b76a"
                               : "#d0d5dd",
-
                           bgcolor:
                             numericAmount === value
                               ? "#12b76a"
                               : "#fff",
-
                           color:
                             numericAmount === value
                               ? "#fff"
                               : "#344054",
-
                           "&:hover": {
                             bgcolor:
                               numericAmount === value
@@ -1494,7 +1563,6 @@ function Deposit() {
                   bgcolor: "#12b76a",
                   boxShadow:
                     "0 5px 14px rgba(18,183,106,.2)",
-
                   "&:hover": {
                     bgcolor: "#039855",
                   },
@@ -1526,7 +1594,8 @@ function Deposit() {
                 variant="caption"
                 color="#98a2b3"
               >
-                Your transaction is protected by authenticated API access
+                Your transaction is protected by
+                authenticated API access
               </Typography>
             </Stack>
           </CardContent>
@@ -1537,6 +1606,7 @@ function Deposit() {
         ================================================= */}
 
         <Stack spacing={2.5}>
+
           {/* SECURITY CARD */}
 
           <Card
@@ -1737,7 +1807,9 @@ function Deposit() {
             </CardContent>
           </Card>
 
-          {/* ACTIVITY */}
+          {/* =================================================
+              TRANSACTION HISTORY
+          ================================================= */}
 
           <Card
             sx={{
@@ -1766,9 +1838,7 @@ function Deposit() {
                 </Avatar>
 
                 <Box>
-                  <Typography
-                    fontWeight={850}
-                  >
+                  <Typography fontWeight={850}>
                     Transaction History
                   </Typography>
 
@@ -1776,23 +1846,183 @@ function Deposit() {
                     variant="caption"
                     color="#667085"
                   >
-                    Review completed deposits
+                    Your 3 most recent deposits
                   </Typography>
                 </Box>
 
                 <IconButton
                   size="small"
                   sx={{ ml: "auto" }}
-                  disabled
+                  onClick={loadRecentDeposits}
+                  disabled={historyLoading}
                 >
                   <MoreHoriz />
                 </IconButton>
               </Stack>
 
+              {/* HISTORY CONTENT */}
+
+              <Box sx={{ mt: 2 }}>
+
+                {historyLoading ? (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                      py: 3,
+                    }}
+                  >
+                    <CircularProgress size={28} />
+                  </Box>
+                ) : recentDeposits.length === 0 ? (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      textAlign: "center",
+                      bgcolor: "#fafafa",
+                    }}
+                  >
+                    <History
+                      sx={{
+                        fontSize: 36,
+                        color: "#98a2b3",
+                        mb: 0.5,
+                      }}
+                    />
+
+                    <Typography
+                      variant="body2"
+                      fontWeight={700}
+                      color="#475467"
+                    >
+                      No deposits yet
+                    </Typography>
+
+                    <Typography
+                      variant="caption"
+                      color="#667085"
+                    >
+                      Completed deposits will appear here.
+                    </Typography>
+                  </Paper>
+                ) : (
+                  <Stack spacing={1.2}>
+                    {recentDeposits.map(
+                      (transaction) => (
+                        <Paper
+                          key={transaction.id}
+                          variant="outlined"
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2,
+                            transition: "all .18s ease",
+                            "&:hover": {
+                              borderColor: "#abefc6",
+                              bgcolor: "#f6fef9",
+                            },
+                          }}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={1.2}
+                            alignItems="center"
+                          >
+                            <Avatar
+                              sx={{
+                                width: 38,
+                                height: 38,
+                                bgcolor: "#dcfae6",
+                                color: "#039855",
+                              }}
+                            >
+                              <ArrowDownwardIcon />
+                            </Avatar>
+
+                            <Box
+                              sx={{
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
+                              <Stack
+                                direction="row"
+                                spacing={0.7}
+                                alignItems="center"
+                              >
+                                <Typography
+                                  variant="body2"
+                                  fontWeight={800}
+                                  color="#101828"
+                                >
+                                  Deposit
+                                </Typography>
+
+                                <Chip
+                                  size="small"
+                                  label="COMPLETED"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: ".58rem",
+                                    fontWeight: 800,
+                                    bgcolor: "#ecfdf3",
+                                    color: "#027a48",
+                                  }}
+                                />
+                              </Stack>
+
+                              <Typography
+                                variant="caption"
+                                color="#667085"
+                                sx={{
+                                  display: "block",
+                                  mt: 0.25,
+                                }}
+                              >
+                                {formatTransactionDate(
+                                  transaction.timestamp
+                                )}
+                              </Typography>
+
+                              <Typography
+                                variant="caption"
+                                color="#98a2b3"
+                                sx={{
+                                  display: "block",
+                                  mt: 0.1,
+                                }}
+                              >
+                                Transaction #{transaction.id}
+                              </Typography>
+                            </Box>
+
+                            <Typography
+                              variant="body2"
+                              fontWeight={900}
+                              color="#039855"
+                              sx={{
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              +{" "}
+                              {formatCurrency(
+                                transaction.amount
+                              )}
+                            </Typography>
+                          </Stack>
+                        </Paper>
+                      )
+                    )}
+                  </Stack>
+                )}
+              </Box>
+
               <Button
                 fullWidth
                 variant="outlined"
-                disabled
+                onClick={loadRecentDeposits}
+                disabled={historyLoading}
                 sx={{
                   mt: 2,
                   borderRadius: 2,
@@ -1800,7 +2030,9 @@ function Deposit() {
                   fontWeight: 750,
                 }}
               >
-                View Recent Deposits
+                {historyLoading
+                  ? "Refreshing..."
+                  : "Refresh Recent Deposits"}
               </Button>
             </CardContent>
           </Card>
@@ -1954,6 +2186,7 @@ function Deposit() {
         >
           <Button
             onClick={() => setReviewOpen(false)}
+            disabled={loading}
             sx={{
               borderRadius: 2,
               textTransform: "none",
@@ -1982,7 +2215,6 @@ function Deposit() {
               textTransform: "none",
               fontWeight: 800,
               bgcolor: "#12b76a",
-
               "&:hover": {
                 bgcolor: "#039855",
               },

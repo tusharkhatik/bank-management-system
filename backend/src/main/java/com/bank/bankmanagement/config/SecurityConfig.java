@@ -27,6 +27,7 @@ public class SecurityConfig {
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter) {
+
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
@@ -35,108 +36,125 @@ public class SecurityConfig {
             HttpSecurity http) throws Exception {
 
         http
-            // =====================================================
-            // CORS
-            // =====================================================
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-            // =====================================================
-            // CSRF
-            // =====================================================
-            .csrf(csrf -> csrf.disable())
-
-            // =====================================================
-            // SESSION
-            // =====================================================
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(
-                    SessionCreationPolicy.STATELESS
-                )
-            )
-
-            // =====================================================
-            // EXCEPTION HANDLING
-            // =====================================================
-            .exceptionHandling(exception -> exception
-
-                .authenticationEntryPoint(
-                    (request, response, authException) -> {
-                        response.sendError(
-                            HttpStatus.UNAUTHORIZED.value(),
-                            "Unauthorized"
-                        );
-                    }
+                // =====================================================
+                // CORS
+                // =====================================================
+                .cors(cors ->
+                        cors.configurationSource(
+                                corsConfigurationSource()
+                        )
                 )
 
-                .accessDeniedHandler(
-                    (request, response, accessDeniedException) -> {
-                        response.sendError(
-                            HttpStatus.FORBIDDEN.value(),
-                            "Access Denied"
-                        );
-                    }
+                // =====================================================
+                // CSRF
+                // =====================================================
+                .csrf(csrf -> csrf.disable())
+
+                // =====================================================
+                // SESSION
+                // =====================================================
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
                 )
-            )
 
-            // =====================================================
-            // AUTHORIZATION
-            // =====================================================
-            .authorizeHttpRequests(auth -> auth
+                // =====================================================
+                // EXCEPTION HANDLING
+                // =====================================================
+                .exceptionHandling(exception -> exception
 
-                // Authentication APIs
-                .requestMatchers(
-                    "/api/auth/**"
-                ).permitAll()
+                        .authenticationEntryPoint(
+                                (request, response, authException) -> {
 
-                // CORS preflight
-                .requestMatchers(
-                    HttpMethod.OPTIONS,
-                    "/**"
-                ).permitAll()
+                                    response.setStatus(
+                                            HttpStatus.UNAUTHORIZED.value()
+                                    );
 
-                // Health check
-                .requestMatchers(
-                    "/actuator/health"
-                ).permitAll()
+                                    response.setContentType(
+                                            "application/json"
+                                    );
 
-                // UPI profile lookup
-                .requestMatchers(
-                    HttpMethod.GET,
-                    "/api/upi/profile/**"
-                ).authenticated()
+                                    response.getWriter().write(
+                                            "{\"message\":\"Unauthorized\"}"
+                                    );
+                                }
+                        )
 
-                // UPI payment
-                .requestMatchers(
-                    HttpMethod.POST,
-                    "/api/upi/pay"
-                ).authenticated()
+                        .accessDeniedHandler(
+                                (request, response, accessDeniedException) -> {
 
-                // Other UPI APIs
-                .requestMatchers(
-                    "/api/upi/**"
-                ).authenticated()
+                                    response.setStatus(
+                                            HttpStatus.FORBIDDEN.value()
+                                    );
 
-                // ADMIN APIs
-                .requestMatchers(
-                    "/api/admin/**"
-                ).hasRole("ADMIN")
+                                    response.setContentType(
+                                            "application/json"
+                                    );
 
-                // Remaining APIs
-                .requestMatchers(
-                    "/api/**"
-                ).authenticated()
+                                    response.getWriter().write(
+                                            "{\"message\":\"Access denied\"}"
+                                    );
+                                }
+                        )
+                )
 
-                // Non-API routes
-                .anyRequest().permitAll()
-            )
+                // =====================================================
+                // AUTHORIZATION
+                // =====================================================
+                .authorizeHttpRequests(auth -> auth
 
-            // =====================================================
-            // JWT FILTER
-            // =====================================================
-            .addFilterBefore(
-                jwtAuthenticationFilter,
-                UsernamePasswordAuthenticationFilter.class
-            );
+                        // Authentication
+                        .requestMatchers(
+                                "/api/auth/**"
+                        ).permitAll()
+
+                        // CORS preflight
+                        .requestMatchers(
+                                HttpMethod.OPTIONS,
+                                "/**"
+                        ).permitAll()
+
+                        // Health
+                        .requestMatchers(
+                                "/actuator/health"
+                        ).permitAll()
+
+                        // ADMIN
+                        .requestMatchers(
+                                "/api/admin/**"
+                        ).hasRole("ADMIN")
+
+                        // TRANSACTIONS
+                        .requestMatchers(
+                                "/api/transactions/**"
+                        ).authenticated()
+
+                        // UPI
+                        .requestMatchers(
+                                "/api/upi/**"
+                        ).authenticated()
+
+                        // ACCOUNTS
+                        .requestMatchers(
+                                "/api/accounts/**"
+                        ).authenticated()
+
+                        // Remaining APIs
+                        .requestMatchers(
+                                "/api/**"
+                        ).authenticated()
+
+                        .anyRequest().permitAll()
+                )
+
+                // =====================================================
+                // JWT FILTER
+                // =====================================================
+                .addFilterBefore(
+                        jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }
@@ -156,83 +174,58 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration configuration) throws Exception {
+            AuthenticationConfiguration configuration)
+            throws Exception {
 
         return configuration.getAuthenticationManager();
     }
 
     // =============================================================
-    // CORS CONFIGURATION
+    // CORS
     // =============================================================
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+  @Bean
+public CorsConfigurationSource corsConfigurationSource() {
 
-        CorsConfiguration configuration = new CorsConfiguration();
+    CorsConfiguration configuration = new CorsConfiguration();
 
-      // ---------------------------------------------------------
-// Allowed frontend origins
-// ---------------------------------------------------------
-configuration.setAllowedOrigins(
-    List.of(
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        "http://192.168.0.109:5173",
-        "http://192.168.0.109:3000",
-        "http://192.168.0.116:5173",
-        "http://192.168.0.116:3000"
-    )
-);
-
-// ---------------------------------------------------------
-// Allowed HTTP methods
-// ---------------------------------------------------------
-configuration.setAllowedMethods(
-    List.of(
-        "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "PATCH",
-        "OPTIONS"
-    )
-);
-        // ---------------------------------------------------------
-        // Allowed request headers
-        // ---------------------------------------------------------
-        configuration.setAllowedHeaders(
+    configuration.setAllowedOriginPatterns(
             List.of(
-                "*"
+                    "http://localhost:*",
+                    "http://127.0.0.1:*",
+                    "http://192.168.*.*:*"
             )
-        );
+    );
 
-        // ---------------------------------------------------------
-        // Exposed response headers
-        // ---------------------------------------------------------
-        configuration.setExposedHeaders(
+    configuration.setAllowedMethods(
             List.of(
-                "Authorization"
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE",
+                    "OPTIONS"
             )
-        );
+    );
 
-        // ---------------------------------------------------------
-        // Credentials
-        // ---------------------------------------------------------
-        configuration.setAllowCredentials(true);
+    configuration.setAllowedHeaders(
+            List.of("*")
+    );
 
-        // ---------------------------------------------------------
-        // Apply CORS to every endpoint
-        // ---------------------------------------------------------
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
+    configuration.setExposedHeaders(
+            List.of("Authorization")
+    );
 
-        source.registerCorsConfiguration(
+    configuration.setAllowCredentials(true);
+
+    UrlBasedCorsConfigurationSource source =
+            new UrlBasedCorsConfigurationSource();
+
+    source.registerCorsConfiguration(
             "/**",
             configuration
-        );
+    );
 
-        return source;
-    }
+    return source;
+}
 }

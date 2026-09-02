@@ -29,9 +29,9 @@ public class AuthController {
         this.userRepository = userRepository;
     }
 
-    // ============================================================
+    // =========================================================
     // REGISTER
-    // ============================================================
+    // =========================================================
 
     @PostMapping("/register")
     public ResponseEntity<?> register(
@@ -45,25 +45,44 @@ public class AuthController {
         );
     }
 
-    // ============================================================
+    // =========================================================
     // LOGIN
-    // ============================================================
+    // =========================================================
 
     @PostMapping("/login")
     public ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest request) {
 
-        String token = authService.login(request);
+        String token =
+                authService.login(request);
 
-        User user = userRepository
-                .findByUsername(request.getUsername().trim())
-                .orElseThrow();
+        String username =
+                request.getUsername()
+                        .trim();
 
-        Map<String, Object> response = new HashMap<>();
+        User user =
+                userRepository
+                        .findByUsername(username)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "User not found"
+                                ));
+
+        String role =
+                user.getRole()
+                        .trim()
+                        .toUpperCase();
+
+        if (role.startsWith("ROLE_")) {
+            role = role.substring(5);
+        }
+
+        Map<String, Object> response =
+                new HashMap<>();
 
         response.put("token", token);
         response.put("username", user.getUsername());
-        response.put("role", user.getRole());
+        response.put("role", role);
 
         return ResponseEntity.ok(response);
     }

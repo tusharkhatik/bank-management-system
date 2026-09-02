@@ -5,6 +5,7 @@ import com.bank.bankmanagement.dto.TransactionResponse;
 import com.bank.bankmanagement.exception.BadRequestException;
 import com.bank.bankmanagement.exception.NotFoundException;
 import com.bank.bankmanagement.model.Transaction;
+import com.bank.bankmanagement.repository.AccountRepository;
 import com.bank.bankmanagement.repository.TransactionRepository;
 
 import org.springframework.data.domain.Page;
@@ -20,22 +21,376 @@ import java.util.List;
 public class TransactionService {
 
     private final TransactionRepository transactionRepository;
+    private final AccountRepository accountRepository;
 
     public TransactionService(
-            TransactionRepository transactionRepository) {
+            TransactionRepository transactionRepository,
+            AccountRepository accountRepository) {
 
         this.transactionRepository = transactionRepository;
+        this.accountRepository = accountRepository;
     }
 
     // =========================================================
     // CURRENT USER TRANSACTIONS
-    //
-    // USER  -> ONLY OWN TRANSACTIONS
-    // ADMIN -> CAN ALSO USE THIS METHOD IF REQUIRED
+    // USER ONLY
     // =========================================================
 
     @Transactional(readOnly = true)
-    public List<TransactionResponse> getTransactionsForCurrentUser() {
+    public List<TransactionResponse>
+    getTransactionsForCurrentUser() {
+
+        Authentication authentication =
+                getAuthentication();
+
+        String username =
+                authentication.getName();
+
+        return transactionRepository
+                .findByOwnerUsernameWithAccounts(username)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+
+    // =========================================================
+    // ADMIN - ALL TRANSACTIONS
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponse>
+    getAllTransactions() {
+
+        requireAdmin();
+
+        return transactionRepository
+                .findAllWithAccounts()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+
+    // =========================================================
+    // TRANSACTION BY ID
+    //
+    // ADMIN -> any transaction
+    // USER  -> own transaction only
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public TransactionResponse
+    getTransactionById(Long id) {
+
+        if (id == null) {
+            throw new BadRequestException(
+                    "Transaction ID is required"
+            );
+        }
+
+        Authentication authentication =
+                getAuthentication();
+
+        Transaction transaction;
+
+        if (isAdmin(authentication)) {
+
+            transaction =
+                    transactionRepository
+                            .findByIdWithAccounts(id)
+                            .orElseThrow(() ->
+                                    new NotFoundException(
+                                            "Transaction not found"
+                                    ));
+
+        } else {
+
+            String username =
+                    authentication.getName();
+
+            transaction =
+                    transactionRepository
+                            .findByIdAndOwnerUsername(
+                                    id,
+                                    username
+                            )
+                            .orElseThrow(() ->
+                                    new NotFoundException(
+                                            "Transaction not found"
+                                    ));
+        }
+
+        return toResponse(transaction);
+    }
+
+
+    // =========================================================
+    // ACCOUNT TRANSACTIONS
+    //
+    // ADMIN -> any account
+    // USER  -> own account only
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponse>
+    getAccountTransactions(Long accountId) {
+
+        validateAccountId(accountId);
+
+        Authentication authentication =
+                getAuthentication();
+
+        if (!isAdmin(authentication)) {
+
+            String username =
+                    authentication.getName();
+
+            boolean owner =
+                    accountRepository
+                            .findByIdAndOwnerUsername(
+                                    accountId,
+                                    username
+                            )
+                            .isPresent();
+
+            if (!owner) {
+                throw new NotFoundException(
+                        "Account not found"
+                );
+            }
+        }
+
+        return transactionRepository
+                .findByAccountIdWithAccounts(accountId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+
+    // =========================================================
+    // ADMIN - TRANSACTIONS BY TYPE
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponse>
+    getTransactionsByType(String type) {
+
+        requireAdmin();
+
+        String normalizedType =
+                validateType(type);
+
+        return transactionRepository
+                .findByTypeWithAccounts(normalizedType)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+
+    // =========================================================
+    // ACCOUNT + TYPE
+    //
+    // ADMIN -> any account
+    // USER  -> own account only
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponse>
+    getAccountTransactionsByType(
+            Long accountId,
+            String type) {
+
+        validateAccountId(accountId);
+
+        String normalizedType =
+                validateType(type);
+
+        Authentication authentication =
+                getAuthentication();
+
+        if (!isAdmin(authentication)) {
+
+            String username =
+                    authentication.getName();
+
+            boolean owner =
+                    accountRepository
+                            .findByIdAndOwnerUsername(
+                                    accountId,
+                                    username
+                            )
+                            .isPresent();
+
+            if (!owner) {
+                throw new NotFoundException(
+                        "Account not found"
+                );
+            }
+        }
+
+        return transactionRepository
+                .findByAccountIdAndTypeWithAccounts(
+                        accountId,
+                        normalizedType
+                )
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+
+    // =========================================================
+    // ADMIN - PAGINATED
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public TransactionPageResponse
+    getTransactionsPaginated(Pageable pageable) {
+
+        requireAdmin();
+
+        Page<Transaction> page =
+                transactionRepository
+                        .findAllPaginated(pageable);
+
+        return toPageResponse(page);
+    }
+
+
+    // =========================================================
+    // ACCOUNT PAGINATION
+    //
+    // ADMIN -> any account
+    // USER  -> own account only
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public TransactionPageResponse
+    getAccountTransactionsPaginated(
+            Long accountId,
+            Pageable pageable) {
+
+        validateAccountId(accountId);
+
+        Authentication authentication =
+                getAuthentication();
+
+        if (!isAdmin(authentication)) {
+
+            String username =
+                    authentication.getName();
+
+            boolean owner =
+                    accountRepository
+                            .findByIdAndOwnerUsername(
+                                    accountId,
+                                    username
+                            )
+                            .isPresent();
+
+            if (!owner) {
+                throw new NotFoundException(
+                        "Account not found"
+                );
+            }
+        }
+
+        Page<Transaction> page =
+                transactionRepository
+                        .findByAccountIdPaginated(
+                                accountId,
+                                pageable
+                        );
+
+        return toPageResponse(page);
+    }
+
+
+    // =========================================================
+    // ADMIN - TYPE PAGINATION
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public TransactionPageResponse
+    getTransactionsByTypePaginated(
+            String type,
+            Pageable pageable) {
+
+        requireAdmin();
+
+        String normalizedType =
+                validateType(type);
+
+        Page<Transaction> page =
+                transactionRepository
+                        .findByTypePaginated(
+                                normalizedType,
+                                pageable
+                        );
+
+        return toPageResponse(page);
+    }
+
+
+    // =========================================================
+    // ACCOUNT + TYPE PAGINATION
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public TransactionPageResponse
+    getAccountTransactionsByTypePaginated(
+            Long accountId,
+            String type,
+            Pageable pageable) {
+
+        validateAccountId(accountId);
+
+        String normalizedType =
+                validateType(type);
+
+        Authentication authentication =
+                getAuthentication();
+
+        if (!isAdmin(authentication)) {
+
+            String username =
+                    authentication.getName();
+
+            boolean owner =
+                    accountRepository
+                            .findByIdAndOwnerUsername(
+                                    accountId,
+                                    username
+                            )
+                            .isPresent();
+
+            if (!owner) {
+                throw new NotFoundException(
+                        "Account not found"
+                );
+            }
+        }
+
+        Page<Transaction> page =
+                transactionRepository
+                        .findByAccountIdAndTypePaginated(
+                                accountId,
+                                normalizedType,
+                                pageable
+                        );
+
+        return toPageResponse(page);
+    }
+
+
+    // =========================================================
+    // AUTHENTICATION
+    // =========================================================
+
+    private Authentication getAuthentication() {
 
         Authentication authentication =
                 SecurityContextHolder
@@ -50,63 +405,48 @@ public class TransactionService {
             );
         }
 
-        String username = authentication.getName();
-
-        return transactionRepository
-                .findByOwnerUsernameWithAccounts(username)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return authentication;
     }
 
-    // =========================================================
-    // ALL TRANSACTIONS
-    //
-    // ADMIN DASHBOARD
-    // =========================================================
-
-    @Transactional(readOnly = true)
-    public List<TransactionResponse> getAllTransactions() {
-
-        return transactionRepository
-                .findAllWithAccounts()
-                .stream()
-                .map(this::toResponse)
-                .toList();
-    }
 
     // =========================================================
-    // GET TRANSACTION BY ID
+    // ADMIN CHECK
     // =========================================================
 
-    @Transactional(readOnly = true)
-    public TransactionResponse getTransactionById(Long id) {
+    private void requireAdmin() {
 
-        if (id == null) {
+        Authentication authentication =
+                getAuthentication();
 
-            throw new BadRequestException(
-                    "Transaction ID is required"
-            );
+        if (!isAdmin(authentication)) {
+
+            throw new org.springframework.security.access
+                    .AccessDeniedException(
+                            "Admin access required"
+                    );
         }
-
-        Transaction transaction =
-                transactionRepository
-                        .findByIdWithAccounts(id)
-                        .orElseThrow(() ->
-                                new NotFoundException(
-                                        "Transaction not found"
-                                ));
-
-        return toResponse(transaction);
     }
 
+
+    private boolean isAdmin(
+            Authentication authentication) {
+
+        return authentication
+                .getAuthorities()
+                .stream()
+                .anyMatch(authority ->
+                        "ROLE_ADMIN".equals(
+                                authority.getAuthority()
+                        )
+                );
+    }
+
+
     // =========================================================
-    // GET ACCOUNT TRANSACTIONS
+    // ACCOUNT ID VALIDATION
     // =========================================================
 
-    @Transactional(readOnly = true)
-    public List<TransactionResponse> getAccountTransactions(
-            Long accountId) {
+    private void validateAccountId(Long accountId) {
 
         if (accountId == null) {
 
@@ -114,169 +454,14 @@ public class TransactionService {
                     "Account ID is required"
             );
         }
-
-        return transactionRepository
-                .findByAccountIdWithAccounts(accountId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
     }
 
-    // =========================================================
-    // GET TRANSACTIONS BY TYPE
-    // =========================================================
-
-    @Transactional(readOnly = true)
-    public List<TransactionResponse> getTransactionsByType(
-            String type) {
-
-        validateType(type);
-
-        String normalizedType =
-                type.trim().toUpperCase();
-
-        return transactionRepository
-                .findByTypeWithAccounts(normalizedType)
-                .stream()
-                .map(this::toResponse)
-                .toList();
-    }
 
     // =========================================================
-    // GET ACCOUNT TRANSACTIONS BY TYPE
+    // TYPE VALIDATION
     // =========================================================
 
-    @Transactional(readOnly = true)
-    public List<TransactionResponse> getAccountTransactionsByType(
-            Long accountId,
-            String type) {
-
-        if (accountId == null) {
-
-            throw new BadRequestException(
-                    "Account ID is required"
-            );
-        }
-
-        validateType(type);
-
-        String normalizedType =
-                type.trim().toUpperCase();
-
-        return transactionRepository
-                .findByAccountIdAndTypeWithAccounts(
-                        accountId,
-                        normalizedType
-                )
-                .stream()
-                .map(this::toResponse)
-                .toList();
-    }
-
-    // =========================================================
-    // PAGINATED TRANSACTIONS
-    // =========================================================
-
-    @Transactional(readOnly = true)
-    public TransactionPageResponse getTransactionsPaginated(
-            Pageable pageable) {
-
-        Page<Transaction> page =
-                transactionRepository
-                        .findAllPaginated(pageable);
-
-        return toPageResponse(page);
-    }
-
-    // =========================================================
-    // PAGINATED ACCOUNT TRANSACTIONS
-    // =========================================================
-
-    @Transactional(readOnly = true)
-    public TransactionPageResponse getAccountTransactionsPaginated(
-            Long accountId,
-            Pageable pageable) {
-
-        if (accountId == null) {
-
-            throw new BadRequestException(
-                    "Account ID is required"
-            );
-        }
-
-        Page<Transaction> page =
-                transactionRepository
-                        .findByAccountIdPaginated(
-                                accountId,
-                                pageable
-                        );
-
-        return toPageResponse(page);
-    }
-
-    // =========================================================
-    // PAGINATED TRANSACTIONS BY TYPE
-    // =========================================================
-
-    @Transactional(readOnly = true)
-    public TransactionPageResponse getTransactionsByTypePaginated(
-            String type,
-            Pageable pageable) {
-
-        validateType(type);
-
-        String normalizedType =
-                type.trim().toUpperCase();
-
-        Page<Transaction> page =
-                transactionRepository
-                        .findByTypePaginated(
-                                normalizedType,
-                                pageable
-                        );
-
-        return toPageResponse(page);
-    }
-
-    // =========================================================
-    // PAGINATED ACCOUNT TRANSACTIONS BY TYPE
-    // =========================================================
-
-    @Transactional(readOnly = true)
-    public TransactionPageResponse
-    getAccountTransactionsByTypePaginated(
-            Long accountId,
-            String type,
-            Pageable pageable) {
-
-        if (accountId == null) {
-
-            throw new BadRequestException(
-                    "Account ID is required"
-            );
-        }
-
-        validateType(type);
-
-        String normalizedType =
-                type.trim().toUpperCase();
-
-        Page<Transaction> page =
-                transactionRepository
-                        .findByAccountIdAndTypePaginated(
-                                accountId,
-                                normalizedType,
-                                pageable
-                        );
-
-        return toPageResponse(page);
-    }
-
-    // =========================================================
-    // VALIDATE TRANSACTION TYPE
-    // =========================================================
-
-    private void validateType(String type) {
+    private String validateType(String type) {
 
         if (type == null ||
                 type.trim().isEmpty()) {
@@ -299,14 +484,17 @@ public class TransactionService {
                     "Invalid transaction type"
             );
         }
+
+        return normalizedType;
     }
 
+
     // =========================================================
-    // PAGE RESPONSE MAPPER
+    // PAGE RESPONSE
     // =========================================================
 
-    private TransactionPageResponse toPageResponse(
-            Page<Transaction> page) {
+    private TransactionPageResponse
+    toPageResponse(Page<Transaction> page) {
 
         return new TransactionPageResponse(
 
@@ -316,25 +504,21 @@ public class TransactionService {
                         .toList(),
 
                 page.getNumber(),
-
                 page.getSize(),
-
                 page.getTotalElements(),
-
                 page.getTotalPages(),
-
                 page.isFirst(),
-
                 page.isLast()
         );
     }
 
+
     // =========================================================
-    // TRANSACTION RESPONSE MAPPER
+    // RESPONSE MAPPER
     // =========================================================
 
-    private TransactionResponse toResponse(
-            Transaction transaction) {
+    private TransactionResponse
+    toResponse(Transaction transaction) {
 
         Long fromId = null;
         String fromNumber = null;
@@ -369,21 +553,13 @@ public class TransactionService {
         }
 
         return new TransactionResponse(
-
                 transaction.getId(),
-
                 transaction.getType(),
-
                 transaction.getAmount(),
-
                 transaction.getTimestamp(),
-
                 fromId,
-
                 fromNumber,
-
                 toId,
-
                 toNumber
         );
     }

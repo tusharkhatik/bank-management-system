@@ -14,35 +14,74 @@ import Admin from "./pages/Admin";
 import UPI from "./pages/UPI";
 import ScanPay from "./pages/ScanPay";
 
+/* =========================================================
+   ROLE HELPER
+========================================================= */
+
 function getUserRole() {
-  const storedRole = localStorage.getItem("role");
-
-  if (storedRole) {
-    return storedRole;
-  }
-
   try {
     const user = JSON.parse(
       localStorage.getItem("user") || "null"
     );
 
-    return user?.role || null;
+    const role = user?.role;
+
+    if (!role) {
+      return null;
+    }
+
+    return String(role)
+      .toUpperCase()
+      .replace("ROLE_", "");
   } catch {
     return null;
   }
 }
-function RoleRoute({ role, children }) {
+
+/* =========================================================
+   AUTHENTICATED ROUTE
+========================================================= */
+
+function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
-  const userRole = getUserRole();
 
   if (!token) {
     return <Navigate to="/" replace />;
   }
 
-  if (userRole !== role) {
+  return children;
+}
+
+/* =========================================================
+   ROLE ROUTE
+========================================================= */
+
+function RoleRoute({ allowedRoles, children }) {
+  const token = localStorage.getItem("token");
+  const userRole = getUserRole();
+
+  /* Not logged in */
+  if (!token) {
+    return <Navigate to="/" replace />;
+  }
+
+  /* Role missing */
+  if (!userRole) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    return <Navigate to="/" replace />;
+  }
+
+  /* Role not allowed */
+  if (!allowedRoles.includes(userRole)) {
     return (
       <Navigate
-        to={userRole === "ADMIN" ? "/admin" : "/dashboard"}
+        to={
+          userRole === "ADMIN"
+            ? "/admin"
+            : "/dashboard"
+        }
         replace
       />
     );
@@ -51,7 +90,11 @@ function RoleRoute({ role, children }) {
   return children;
 }
 
-function ProtectedLayout({ children }) {
+/* =========================================================
+   SHARED LAYOUT
+========================================================= */
+
+function AuthenticatedLayout({ children }) {
   return (
     <ProtectedRoute>
       <Layout>{children}</Layout>
@@ -59,87 +102,95 @@ function ProtectedLayout({ children }) {
   );
 }
 
+/* =========================================================
+   USER LAYOUT
+========================================================= */
+
 function UserLayout({ children }) {
   return (
-    <RoleRoute role="USER">
+    <RoleRoute allowedRoles={["USER"]}>
       <Layout>{children}</Layout>
     </RoleRoute>
   );
 }
 
+/* =========================================================
+   ADMIN LAYOUT
+========================================================= */
+
 function AdminLayout({ children }) {
   return (
-    <RoleRoute role="ADMIN">
+    <RoleRoute allowedRoles={["ADMIN"]}>
       <Layout>{children}</Layout>
     </RoleRoute>
   );
 }
+
+/* =========================================================
+   USER + ADMIN LAYOUT
+========================================================= */
+
+function UserAndAdminLayout({ children }) {
+  return (
+    <RoleRoute allowedRoles={["USER", "ADMIN"]}>
+      <Layout>{children}</Layout>
+    </RoleRoute>
+  );
+}
+
+/* =========================================================
+   DEFAULT REDIRECT
+========================================================= */
+
+function HomeRedirect() {
+  const token = localStorage.getItem("token");
+  const role = getUserRole();
+
+  if (!token) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (role === "ADMIN") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (role === "USER") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+
+  return <Navigate to="/" replace />;
+}
+
+/* =========================================================
+   APP
+========================================================= */
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* ==================== LOGIN ==================== */}
+        {/* =================================================
+            LOGIN
+        ================================================= */}
 
-        <Route path="/" element={<Login />} />
+        <Route
+          path="/"
+          element={<Login />}
+        />
 
-
-        {/* ==================== USER DASHBOARD ==================== */}
+        {/* =================================================
+            USER ONLY
+        ================================================= */}
 
         <Route
           path="/dashboard"
           element={
             <UserLayout>
               <Dashboard />
-            </UserLayout>
-          }
-        />
-
-
-        {/* ==================== USER PAGES ==================== */}
-
-        <Route
-          path="/customers"
-          element={
-            <UserLayout>
-              <Customers />
-            </UserLayout>
-          }
-        />
-
-        <Route
-          path="/accounts"
-          element={
-            <UserLayout>
-              <Accounts />
-            </UserLayout>
-          }
-        />
-
-        <Route
-          path="/deposit"
-          element={
-            <UserLayout>
-              <Deposit />
-            </UserLayout>
-          }
-        />
-
-        <Route
-          path="/withdraw"
-          element={
-            <UserLayout>
-              <Withdraw />
-            </UserLayout>
-          }
-        />
-
-        <Route
-          path="/transfer"
-          element={
-            <UserLayout>
-              <Transfer />
             </UserLayout>
           }
         />
@@ -162,17 +213,67 @@ export default function App() {
           }
         />
 
+        {/* =================================================
+            USER + ADMIN
+        ================================================= */}
+
         <Route
-          path="/transactions"
+          path="/accounts"
           element={
-            <UserLayout>
-              <Transactions />
-            </UserLayout>
+            <UserAndAdminLayout>
+              <Accounts />
+            </UserAndAdminLayout>
           }
         />
 
+        <Route
+          path="/deposit"
+          element={
+            <UserAndAdminLayout>
+              <Deposit />
+            </UserAndAdminLayout>
+          }
+        />
 
-        {/* ==================== ADMIN ==================== */}
+        <Route
+          path="/withdraw"
+          element={
+            <UserAndAdminLayout>
+              <Withdraw />
+            </UserAndAdminLayout>
+          }
+        />
+
+        <Route
+          path="/transfer"
+          element={
+            <UserAndAdminLayout>
+              <Transfer />
+            </UserAndAdminLayout>
+          }
+        />
+
+        <Route
+          path="/transactions"
+          element={
+            <UserAndAdminLayout>
+              <Transactions />
+            </UserAndAdminLayout>
+          }
+        />
+
+        {/* =================================================
+            ADMIN ONLY
+        ================================================= */}
+
+        <Route
+          path="/customers"
+          element={
+            <AdminLayout>
+              <Customers />
+            </AdminLayout>
+          }
+        />
 
         <Route
           path="/admin"
@@ -183,25 +284,21 @@ export default function App() {
           }
         />
 
+        {/* =================================================
+            ROOT / UNKNOWN ROUTES
+        ================================================= */}
 
-        {/* ==================== UNKNOWN ROUTES ==================== */}
+        <Route
+          path="/home"
+          element={<HomeRedirect />}
+        />
 
         <Route
           path="*"
-          element={
-            <Navigate
-              to={
-                getUserRole() === "ADMIN"
-                  ? "/admin"
-                  : "/dashboard"
-              }
-              replace
-            />
-          }
+          element={<HomeRedirect />}
         />
 
       </Routes>
     </BrowserRouter>
   );
 }
-

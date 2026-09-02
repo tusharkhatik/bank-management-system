@@ -22,8 +22,7 @@ public class JwtService {
     private final SecretKey secretKey;
 
     public JwtService(
-            @Value("${jwt.secret}") String secret
-    ) {
+            @Value("${jwt.secret}") String secret) {
 
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException(
@@ -44,14 +43,32 @@ public class JwtService {
                 Keys.hmacShaKeyFor(keyBytes);
     }
 
+    // =========================================================
+    // GENERATE TOKEN
+    // =========================================================
+
     public String generateToken(User user) {
+
+        if (user == null) {
+            throw new IllegalArgumentException(
+                    "User is required"
+            );
+        }
+
+        String role =
+                normalizeRole(user.getRole());
+
+        if (!"USER".equals(role)
+                && !"ADMIN".equals(role)) {
+
+            throw new IllegalStateException(
+                    "Invalid user role"
+            );
+        }
 
         return Jwts.builder()
                 .subject(user.getUsername())
-                .claim(
-                        "role",
-                        normalizeRole(user.getRole())
-                )
+                .claim("role", role)
                 .issuedAt(new Date())
                 .expiration(
                         new Date(
@@ -63,34 +80,62 @@ public class JwtService {
                 .compact();
     }
 
+    // =========================================================
+    // EXTRACT USERNAME
+    // =========================================================
+
     public String extractUsername(String token) {
 
         return getClaims(token)
                 .getSubject();
     }
 
+    // =========================================================
+    // EXTRACT ROLE
+    // =========================================================
+
     public String extractRole(String token) {
 
-        return getClaims(token)
-                .get("role", String.class);
+        return normalizeRole(
+                getClaims(token)
+                        .get("role", String.class)
+        );
     }
+
+    // =========================================================
+    // VALIDATE TOKEN
+    // =========================================================
 
     public boolean isTokenValid(String token) {
 
         try {
 
+            if (token == null || token.isBlank()) {
+                return false;
+            }
+
             Claims claims = getClaims(token);
 
-            return claims.getSubject() != null
-                    && claims.getExpiration() != null
-                    && claims.getExpiration()
-                            .after(new Date());
+            String username =
+                    claims.getSubject();
+
+            Date expiration =
+                    claims.getExpiration();
+
+            return username != null
+                    && !username.isBlank()
+                    && expiration != null
+                    && expiration.after(new Date());
 
         } catch (Exception e) {
 
             return false;
         }
     }
+
+    // =========================================================
+    // GET CLAIMS
+    // =========================================================
 
     private Claims getClaims(String token) {
 
@@ -101,14 +146,24 @@ public class JwtService {
                 .getPayload();
     }
 
+    // =========================================================
+    // NORMALIZE ROLE
+    // =========================================================
+
     private String normalizeRole(String role) {
 
         if (role == null) {
             return null;
         }
 
-        return role.startsWith("ROLE_")
-                ? role.substring(5)
-                : role;
+        String normalized =
+                role.trim().toUpperCase();
+
+        if (normalized.startsWith("ROLE_")) {
+            normalized =
+                    normalized.substring(5);
+        }
+
+        return normalized;
     }
 }

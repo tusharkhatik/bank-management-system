@@ -6,24 +6,19 @@ import {
   ArrowUpward,
   CalendarMonth,
   CheckCircle,
-  ChevronLeft,
-  ChevronRight,
   Close,
   Download,
   FilterAlt,
   History,
-  MoreVert,
   Refresh,
   Search,
   SwapHoriz,
   TrendingUp,
   Visibility,
-  Warning,
 } from "@mui/icons-material";
 
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Card,
@@ -33,13 +28,10 @@ import {
   Divider,
   Drawer,
   FormControl,
-  Grid,
   IconButton,
   InputAdornment,
   InputLabel,
-  LinearProgress,
   MenuItem,
-  Paper,
   Select,
   Skeleton,
   Stack,
@@ -70,15 +62,50 @@ const TRANSACTION_TYPES = [
   { value: "TRANSFER", label: "Transfers" },
 ];
 
+/*
+ * Your current backend TransactionResponse does not contain
+ * a transaction status.
+ *
+ * Therefore we should NOT show Pending/Failed filters.
+ * Transactions returned by the backend are treated as
+ * recorded/completed records in this UI.
+ */
 const TRANSACTION_STATUSES = [
-  { value: "ALL", label: "All Statuses" },
-  { value: "COMPLETED", label: "Completed" },
-  { value: "PENDING", label: "Pending" },
-  { value: "FAILED", label: "Failed" },
+  { value: "ALL", label: "All Records" },
+  { value: "COMPLETED", label: "Recorded" },
 ];
 
 /* =========================================================
-   HELPERS
+   ROLE HELPER
+========================================================= */
+
+const getCurrentUserRole = () => {
+  try {
+    const user = JSON.parse(
+      localStorage.getItem("user") || "null"
+    );
+
+    const role =
+      user?.role ||
+      localStorage.getItem("role") ||
+      "";
+
+    return String(role)
+      .trim()
+      .toUpperCase()
+      .replace(/^ROLE_/, "");
+  } catch {
+    const role = localStorage.getItem("role") || "";
+
+    return String(role)
+      .trim()
+      .toUpperCase()
+      .replace(/^ROLE_/, "");
+  }
+};
+
+/* =========================================================
+   TRANSACTION HELPERS
 ========================================================= */
 
 const getTransactionType = (transaction) =>
@@ -111,7 +138,46 @@ const getTimestamp = (transaction) =>
   transaction?.transactionDate ||
   null;
 
-const getAccountNumber = (transaction) => {
+/* =========================================================
+   ACCOUNT HELPERS
+========================================================= */
+
+const getFromAccountNumber = (transaction) =>
+  transaction?.fromAccountNumber ||
+  transaction?.fromAccount?.accountNumber ||
+  null;
+
+const getToAccountNumber = (transaction) =>
+  transaction?.toAccountNumber ||
+  transaction?.toAccount?.accountNumber ||
+  null;
+
+const getFromAccountId = (transaction) =>
+  transaction?.fromAccountId ||
+  transaction?.fromAccount?.id ||
+  null;
+
+const getToAccountId = (transaction) =>
+  transaction?.toAccountId ||
+  transaction?.toAccount?.id ||
+  null;
+
+const getAccountDisplay = (transaction) => {
+  const from = getFromAccountNumber(transaction);
+  const to = getToAccountNumber(transaction);
+
+  if (from && to) {
+    return `${from} → ${to}`;
+  }
+
+  if (from) {
+    return from;
+  }
+
+  if (to) {
+    return to;
+  }
+
   if (transaction?.accountNumber) {
     return transaction.accountNumber;
   }
@@ -127,37 +193,25 @@ const getAccountNumber = (transaction) => {
   return "—";
 };
 
-const getCustomerName = (transaction) => {
-  if (transaction?.customerName) {
-    return transaction.customerName;
+const getAccountIdDisplay = (transaction) => {
+  const from = getFromAccountId(transaction);
+  const to = getToAccountId(transaction);
+
+  if (from && to) {
+    return `${from} → ${to}`;
   }
 
-  if (transaction?.customer?.name) {
-    return transaction.customer.name;
-  }
-
-  if (transaction?.account?.customer?.name) {
-    return transaction.account.customer.name;
-  }
-
-  return "—";
+  return (
+    from ||
+    to ||
+    transaction?.accountId ||
+    "—"
+  );
 };
 
-const getCustomerId = (transaction) => {
-  if (transaction?.customerId) {
-    return transaction.customerId;
-  }
-
-  if (transaction?.customer?.id) {
-    return transaction.customer.id;
-  }
-
-  if (transaction?.account?.customer?.id) {
-    return transaction.account.customer.id;
-  }
-
-  return "—";
-};
+/* =========================================================
+   FORMAT HELPERS
+========================================================= */
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -222,6 +276,7 @@ const normalizeText = (value) =>
 
 const escapeCsv = (value) => {
   const text = String(value ?? "");
+
   return `"${text.replace(/"/g, '""')}"`;
 };
 
@@ -271,31 +326,20 @@ function getTypeConfig(type) {
 ========================================================= */
 
 function TransactionStatus({ status }) {
-  const normalized = String(status || "COMPLETED").toUpperCase();
-
-  let color = "success";
-  let icon = <CheckCircle fontSize="small" />;
-
-  if (normalized === "PENDING" || normalized === "PROCESSING") {
-    color = "warning";
-    icon = <Warning fontSize="small" />;
-  }
-
-  if (
-    normalized === "FAILED" ||
-    normalized === "CANCELLED" ||
-    normalized === "REJECTED"
-  ) {
-    color = "error";
-    icon = <Warning fontSize="small" />;
-  }
+  const normalized = String(
+    status || "COMPLETED"
+  ).toUpperCase();
 
   return (
     <Chip
       size="small"
-      icon={icon}
-      label={normalized}
-      color={color}
+      icon={<CheckCircle fontSize="small" />}
+      label={
+        normalized === "COMPLETED"
+          ? "Recorded"
+          : normalized
+      }
+      color="success"
       variant="outlined"
       sx={{
         height: 28,
@@ -389,32 +433,33 @@ function MetricCard({
 function LoadingTable() {
   return (
     <TableBody>
-      {Array.from({ length: 7 }).map((_, index) => (
-        <TableRow key={index}>
-          {Array.from({ length: 7 }).map(
-            (__,
-            cellIndex) => (
-              <TableCell key={cellIndex}>
-                <Skeleton
-                  variant="rounded"
-                  height={24}
-                  width={
-                    cellIndex === 0
-                      ? "70%"
-                      : "85%"
-                  }
-                />
-              </TableCell>
-            )
-          )}
-        </TableRow>
-      ))}
+      {Array.from({ length: 7 }).map(
+        (_, index) => (
+          <TableRow key={index}>
+            {Array.from({ length: 7 }).map(
+              (_, cellIndex) => (
+                <TableCell key={cellIndex}>
+                  <Skeleton
+                    variant="rounded"
+                    height={24}
+                    width={
+                      cellIndex === 0
+                        ? "70%"
+                        : "85%"
+                    }
+                  />
+                </TableCell>
+              )
+            )}
+          </TableRow>
+        )
+      )}
     </TableBody>
   );
 }
 
 /* =========================================================
-   TRANSACTION DETAIL DRAWER
+   DETAIL DRAWER
 ========================================================= */
 
 function TransactionDetails({
@@ -427,9 +472,17 @@ function TransactionDetails({
   const amount = getAmount(transaction);
   const timestamp = getTimestamp(transaction);
 
-  const account = getAccountNumber(transaction);
-  const customer = getCustomerName(transaction);
-  const customerId = getCustomerId(transaction);
+  const fromAccount =
+    getFromAccountNumber(transaction);
+
+  const toAccount =
+    getToAccountNumber(transaction);
+
+  const fromAccountId =
+    getFromAccountId(transaction);
+
+  const toAccountId =
+    getToAccountId(transaction);
 
   return (
     <Drawer
@@ -482,6 +535,7 @@ function TransactionDetails({
             sx={{ mt: 1.5 }}
           >
             <TransactionTypeChip type={type} />
+
             <TransactionStatus
               status={getTransactionStatus(
                 transaction
@@ -516,27 +570,70 @@ function TransactionDetails({
           />
 
           <DetailField
-            label="Account Number"
-            value={account}
+            label="Account"
+            value={getAccountDisplay(transaction)}
           />
 
           <DetailField
-            label="Customer"
-            value={customer}
-          />
-
-          <DetailField
-            label="Customer ID"
-            value={customerId}
+            label="Account ID"
+            value={getAccountIdDisplay(
+              transaction
+            )}
           />
 
           <DetailField
             label="Status"
-            value={getTransactionStatus(
-              transaction
-            )}
+            value={
+              getTransactionStatus(
+                transaction
+              ) === "COMPLETED"
+                ? "Recorded"
+                : getTransactionStatus(
+                    transaction
+                  )
+            }
           />
         </Box>
+
+        {(fromAccount || toAccount) && (
+          <>
+            <Divider sx={{ my: 3 }} />
+
+            <Typography className="section-title">
+              Account information
+            </Typography>
+
+            <Box className="detail-grid">
+              {fromAccount && (
+                <DetailField
+                  label="From Account"
+                  value={fromAccount}
+                />
+              )}
+
+              {toAccount && (
+                <DetailField
+                  label="To Account"
+                  value={toAccount}
+                />
+              )}
+
+              {fromAccountId && (
+                <DetailField
+                  label="From Account ID"
+                  value={fromAccountId}
+                />
+              )}
+
+              {toAccountId && (
+                <DetailField
+                  label="To Account ID"
+                  value={toAccountId}
+                />
+              )}
+            </Box>
+          </>
+        )}
 
         <Divider sx={{ my: 3 }} />
 
@@ -557,31 +654,12 @@ function TransactionDetails({
 
           <Box className="financial-status">
             <CheckCircle />
+
             <Typography>
-              Transaction recorded
+              Transaction recorded successfully
             </Typography>
           </Box>
         </Box>
-
-        {transaction.description && (
-          <>
-            <Typography
-              className="section-title"
-              sx={{ mt: 3 }}
-            >
-              Description
-            </Typography>
-
-            <Paper
-              variant="outlined"
-              className="description-box"
-            >
-              <Typography>
-                {String(transaction.description)}
-              </Typography>
-            </Paper>
-          </>
-        )}
       </Box>
     </Drawer>
   );
@@ -610,26 +688,41 @@ function DetailField({ label, value }) {
 ========================================================= */
 
 function Transactions() {
-  const [transactions, setTransactions] = useState([]);
+  const [transactions, setTransactions] =
+    useState([]);
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("ALL");
+
+  const [typeFilter, setTypeFilter] =
+    useState("ALL");
+
   const [statusFilter, setStatusFilter] =
     useState("ALL");
 
   const [dateFilter, setDateFilter] =
     useState("ALL");
 
-  const [selectedTransaction, setSelectedTransaction] =
-    useState(null);
+  const [
+    selectedTransaction,
+    setSelectedTransaction,
+  ] = useState(null);
 
   const [page, setPage] = useState(0);
+
   const [rowsPerPage, setRowsPerPage] =
     useState(PAGE_SIZE);
+
+  const role = getCurrentUserRole();
+
+  const isAdmin = role === "ADMIN";
 
   /* =======================================================
      LOAD TRANSACTIONS
@@ -647,11 +740,49 @@ function Transactions() {
 
       setError("");
 
-      const response = await api.get(
-        "/transactions"
+      /*
+       * ADMIN:
+       * GET /api/transactions
+       *
+       * USER:
+       * GET /api/transactions/my
+       */
+      const currentRole =
+        getCurrentUserRole();
+
+      const endpoint =
+        currentRole === "ADMIN"
+          ? "/transactions"
+          : "/transactions/my";
+
+      console.log(
+        "================================="
       );
 
-      const data = Array.isArray(response.data)
+      console.log(
+        "Loading transactions"
+      );
+
+      console.log(
+        "ROLE:",
+        currentRole
+      );
+
+      console.log(
+        "ENDPOINT:",
+        endpoint
+      );
+
+      console.log(
+        "================================="
+      );
+
+      const response =
+        await api.get(endpoint);
+
+      const data = Array.isArray(
+        response?.data
+      )
         ? response.data
         : [];
 
@@ -662,15 +793,40 @@ function Transactions() {
         err
       );
 
-      setError(
-        err?.response?.data?.message ||
-          "Unable to load transaction history. Please try again."
+      console.error(
+        "Transaction API response:",
+        err?.response?.data
       );
+
+      const status =
+        err?.response?.status;
+
+      if (status === 401) {
+        setError(
+          "Your session has expired. Please log in again."
+        );
+      } else if (status === 403) {
+        setError(
+          "You do not have permission to view these transactions."
+        );
+      } else {
+        setError(
+          err?.response?.data?.message ||
+            err?.response?.data?.error ||
+            "Unable to load transaction history. Please try again."
+        );
+      }
+
+      setTransactions([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
+
+  /* =======================================================
+     INITIAL LOAD
+  ======================================================= */
 
   useEffect(() => {
     loadTransactions(true);
@@ -686,52 +842,41 @@ function Transactions() {
     let withdrawals = 0;
     let transfers = 0;
 
-    let completed = 0;
-    let pending = 0;
-    let failed = 0;
+    let depositCount = 0;
+    let withdrawalCount = 0;
+    let transferCount = 0;
 
-    transactions.forEach((transaction) => {
-      const amount = getAmount(transaction);
-      const type = getTransactionType(transaction);
-      const status =
-        getTransactionStatus(transaction);
+    transactions.forEach(
+      (transaction) => {
+        const amount =
+          getAmount(transaction);
 
-      total += amount;
+        const type =
+          getTransactionType(
+            transaction
+          );
 
-      if (type === "DEPOSIT") {
-        deposits += amount;
+        total += amount;
+
+        if (type === "DEPOSIT") {
+          deposits += amount;
+          depositCount++;
+        }
+
+        if (
+          type === "WITHDRAW" ||
+          type === "WITHDRAWAL"
+        ) {
+          withdrawals += amount;
+          withdrawalCount++;
+        }
+
+        if (type === "TRANSFER") {
+          transfers += amount;
+          transferCount++;
+        }
       }
-
-      if (
-        type === "WITHDRAW" ||
-        type === "WITHDRAWAL"
-      ) {
-        withdrawals += amount;
-      }
-
-      if (type === "TRANSFER") {
-        transfers += amount;
-      }
-
-      if (status === "COMPLETED") {
-        completed++;
-      }
-
-      if (
-        status === "PENDING" ||
-        status === "PROCESSING"
-      ) {
-        pending++;
-      }
-
-      if (
-        status === "FAILED" ||
-        status === "CANCELLED" ||
-        status === "REJECTED"
-      ) {
-        failed++;
-      }
-    });
+    );
 
     return {
       count: transactions.length,
@@ -739,9 +884,9 @@ function Transactions() {
       deposits,
       withdrawals,
       transfers,
-      completed,
-      pending,
-      failed,
+      depositCount,
+      withdrawalCount,
+      transferCount,
     };
   }, [transactions]);
 
@@ -749,144 +894,215 @@ function Transactions() {
      FILTERING
   ======================================================= */
 
-  const filteredTransactions = useMemo(() => {
-    const query = normalizeText(search);
+  const filteredTransactions =
+    useMemo(() => {
+      const query =
+        normalizeText(search);
 
-    const now = new Date();
+      const now = new Date();
 
-    return transactions.filter((transaction) => {
-      const type = getTransactionType(transaction);
+      return transactions.filter(
+        (transaction) => {
+          const type =
+            getTransactionType(
+              transaction
+            );
 
-      const status =
-        getTransactionStatus(transaction);
+          const status =
+            getTransactionStatus(
+              transaction
+            );
 
-      const timestamp = getTimestamp(transaction);
+          const timestamp =
+            getTimestamp(transaction);
 
-      /* Search */
-      if (query) {
-        const searchableValues = [
-          getTransactionId(transaction),
-          getAccountNumber(transaction),
-          getCustomerName(transaction),
-          getCustomerId(transaction),
-          transaction?.description,
-          transaction?.referenceNumber,
-          type,
-          status,
-        ];
+          /* ---------------------------------------------
+             SEARCH
+          --------------------------------------------- */
 
-        const matchesSearch =
-          searchableValues.some((value) =>
-            normalizeText(value).includes(query)
-          );
+          if (query) {
+            const searchableValues = [
+              getTransactionId(
+                transaction
+              ),
 
-        if (!matchesSearch) {
-          return false;
+              getAccountDisplay(
+                transaction
+              ),
+
+              getAccountIdDisplay(
+                transaction
+              ),
+
+              getFromAccountNumber(
+                transaction
+              ),
+
+              getToAccountNumber(
+                transaction
+              ),
+
+              getFromAccountId(
+                transaction
+              ),
+
+              getToAccountId(
+                transaction
+              ),
+
+              type,
+
+              status,
+            ];
+
+            const matchesSearch =
+              searchableValues.some(
+                (value) =>
+                  normalizeText(
+                    value
+                  ).includes(query)
+              );
+
+            if (!matchesSearch) {
+              return false;
+            }
+          }
+
+          /* ---------------------------------------------
+             TYPE FILTER
+          --------------------------------------------- */
+
+          if (
+            typeFilter !== "ALL" &&
+            type !== typeFilter
+          ) {
+            return false;
+          }
+
+          /* ---------------------------------------------
+             STATUS FILTER
+          --------------------------------------------- */
+
+          if (
+            statusFilter !== "ALL" &&
+            status !== statusFilter
+          ) {
+            return false;
+          }
+
+          /* ---------------------------------------------
+             DATE FILTER
+          --------------------------------------------- */
+
+          if (
+            dateFilter !== "ALL" &&
+            timestamp
+          ) {
+            const date =
+              new Date(timestamp);
+
+            if (
+              !Number.isNaN(
+                date.getTime()
+              )
+            ) {
+              const diff =
+                now.getTime() -
+                date.getTime();
+
+              const days =
+                diff /
+                (1000 *
+                  60 *
+                  60 *
+                  24);
+
+              /*
+               * Future transactions should not be
+               * included in "Last N Days".
+               */
+              if (days < 0) {
+                return false;
+              }
+
+              if (
+                dateFilter === "7" &&
+                days > 7
+              ) {
+                return false;
+              }
+
+              if (
+                dateFilter === "30" &&
+                days > 30
+              ) {
+                return false;
+              }
+
+              if (
+                dateFilter === "90" &&
+                days > 90
+              ) {
+                return false;
+              }
+            }
+          }
+
+          return true;
         }
-      }
-
-      /* Type */
-      if (
-        typeFilter !== "ALL" &&
-        type !== typeFilter
-      ) {
-        return false;
-      }
-
-      /* Status */
-      if (
-        statusFilter !== "ALL" &&
-        status !== statusFilter
-      ) {
-        return false;
-      }
-
-      /* Date */
-      if (
-        dateFilter !== "ALL" &&
-        timestamp
-      ) {
-        const date = new Date(timestamp);
-
-        if (!Number.isNaN(date.getTime())) {
-          const diff =
-            now.getTime() - date.getTime();
-
-          const days =
-            diff / (1000 * 60 * 60 * 24);
-
-          if (
-            dateFilter === "7" &&
-            days > 7
-          ) {
-            return false;
-          }
-
-          if (
-            dateFilter === "30" &&
-            days > 30
-          ) {
-            return false;
-          }
-
-          if (
-            dateFilter === "90" &&
-            days > 90
-          ) {
-            return false;
-          }
-        }
-      }
-
-      return true;
-    });
-  }, [
-    transactions,
-    search,
-    typeFilter,
-    statusFilter,
-    dateFilter,
-  ]);
+      );
+    }, [
+      transactions,
+      search,
+      typeFilter,
+      statusFilter,
+      dateFilter,
+    ]);
 
   /* =======================================================
      SORT
   ======================================================= */
 
-  const sortedTransactions = useMemo(() => {
-    return [...filteredTransactions].sort(
-      (a, b) => {
-        const dateA = new Date(
-          getTimestamp(a) || 0
-        ).getTime();
+  const sortedTransactions =
+    useMemo(() => {
+      return [
+        ...filteredTransactions,
+      ].sort((a, b) => {
+        const dateA =
+          new Date(
+            getTimestamp(a) || 0
+          ).getTime();
 
-        const dateB = new Date(
-          getTimestamp(b) || 0
-        ).getTime();
+        const dateB =
+          new Date(
+            getTimestamp(b) || 0
+          ).getTime();
 
         return dateB - dateA;
-      }
-    );
-  }, [filteredTransactions]);
+      });
+    }, [filteredTransactions]);
 
   /* =======================================================
      PAGINATION
   ======================================================= */
 
-  const paginatedTransactions = useMemo(() => {
-    const start = page * rowsPerPage;
+  const paginatedTransactions =
+    useMemo(() => {
+      const start =
+        page * rowsPerPage;
 
-    return sortedTransactions.slice(
-      start,
-      start + rowsPerPage
-    );
-  }, [
-    sortedTransactions,
-    page,
-    rowsPerPage,
-  ]);
+      return sortedTransactions.slice(
+        start,
+        start + rowsPerPage
+      );
+    }, [
+      sortedTransactions,
+      page,
+      rowsPerPage,
+    ]);
 
   /* =======================================================
-     RESET PAGE WHEN FILTER CHANGES
+     RESET PAGE
   ======================================================= */
 
   useEffect(() => {
@@ -912,51 +1128,102 @@ function Transactions() {
       "Type",
       "Amount",
       "Status",
-      "Account Number",
-      "Customer Name",
-      "Customer ID",
+      "From Account",
+      "To Account",
+      "From Account ID",
+      "To Account ID",
       "Date",
       "Time",
     ];
 
-    const rows = sortedTransactions.map(
-      (transaction) => [
-        getTransactionId(transaction),
-        getTypeConfig(
-          getTransactionType(transaction)
-        ).label,
-        getAmount(transaction),
-        getTransactionStatus(transaction),
-        getAccountNumber(transaction),
-        getCustomerName(transaction),
-        getCustomerId(transaction),
-        formatDate(getTimestamp(transaction)),
-        formatTime(getTimestamp(transaction)),
-      ]
-    );
+    const rows =
+      sortedTransactions.map(
+        (transaction) => [
+          getTransactionId(
+            transaction
+          ),
+
+          getTypeConfig(
+            getTransactionType(
+              transaction
+            )
+          ).label,
+
+          getAmount(transaction),
+
+          getTransactionStatus(
+            transaction
+          ) === "COMPLETED"
+            ? "Recorded"
+            : getTransactionStatus(
+                transaction
+              ),
+
+          getFromAccountNumber(
+            transaction
+          ) || "—",
+
+          getToAccountNumber(
+            transaction
+          ) || "—",
+
+          getFromAccountId(
+            transaction
+          ) || "—",
+
+          getToAccountId(
+            transaction
+          ) || "—",
+
+          formatDate(
+            getTimestamp(
+              transaction
+            )
+          ),
+
+          formatTime(
+            getTimestamp(
+              transaction
+            )
+          ),
+        ]
+      );
 
     const csv = [
-      headers.map(escapeCsv).join(","),
+      headers
+        .map(escapeCsv)
+        .join(","),
+
       ...rows.map((row) =>
-        row.map(escapeCsv).join(",")
+        row
+          .map(escapeCsv)
+          .join(",")
       ),
     ].join("\n");
 
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;",
-    });
+    const blob = new Blob(
+      [csv],
+      {
+        type: "text/csv;charset=utf-8;",
+      }
+    );
 
-    const url = URL.createObjectURL(blob);
+    const url =
+      URL.createObjectURL(blob);
 
-    const link = document.createElement("a");
+    const link =
+      document.createElement("a");
 
     link.href = url;
+
     link.download = `transactions-${new Date()
       .toISOString()
       .slice(0, 10)}.csv`;
 
     document.body.appendChild(link);
+
     link.click();
+
     document.body.removeChild(link);
 
     URL.revokeObjectURL(url);
@@ -988,10 +1255,6 @@ function Transactions() {
     <Box className="transactions-page">
       <style>
         {`
-          /* =================================================
-             PAGE
-          ================================================= */
-
           .transactions-page {
             min-height: 100vh;
             background:
@@ -1009,10 +1272,6 @@ function Transactions() {
             max-width: 1600px;
             margin: 0 auto;
           }
-
-          /* =================================================
-             HEADER
-          ================================================= */
 
           .page-header {
             display: flex;
@@ -1070,10 +1329,6 @@ function Transactions() {
             font-weight: 700 !important;
             box-shadow: none !important;
           }
-
-          /* =================================================
-             METRICS
-          ================================================= */
 
           .metrics-grid {
             display: grid;
@@ -1164,10 +1419,6 @@ function Transactions() {
             font-size: 12px !important;
           }
 
-          /* =================================================
-             MAIN CARD
-          ================================================= */
-
           .transactions-card {
             border: 1px solid #e5e9f0 !important;
             border-radius: 16px !important;
@@ -1242,10 +1493,6 @@ function Transactions() {
             font-weight: 700 !important;
           }
 
-          /* =================================================
-             TABLE
-          ================================================= */
-
           .table-wrapper {
             width: 100%;
             overflow-x: auto;
@@ -1314,18 +1561,7 @@ function Transactions() {
             font-size: 12px !important;
             color: #344054 !important;
             font-weight: 700 !important;
-          }
-
-          .customer-name {
-            color: #344054 !important;
-            font-size: 13px !important;
-            font-weight: 700 !important;
-          }
-
-          .customer-id {
-            color: #98a2b3 !important;
-            font-size: 11px !important;
-            margin-top: 2px !important;
+            white-space: nowrap;
           }
 
           .amount {
@@ -1357,10 +1593,6 @@ function Transactions() {
             background: #eff6ff !important;
             color: #2563eb !important;
           }
-
-          /* =================================================
-             EMPTY STATE
-          ================================================= */
 
           .empty-state {
             padding: 70px 24px;
@@ -1394,10 +1626,6 @@ function Transactions() {
             color: #98a2b3;
           }
 
-          /* =================================================
-             PAGINATION
-          ================================================= */
-
           .pagination-bar {
             min-height: 58px;
             border-top: 1px solid #eaecf0;
@@ -1413,10 +1641,6 @@ function Transactions() {
             font-size: 12px !important;
             font-weight: 600 !important;
           }
-
-          /* =================================================
-             DRAWER
-          ================================================= */
 
           .transaction-drawer {
             width: 450px;
@@ -1569,18 +1793,6 @@ function Transactions() {
             font-size: 17px;
           }
 
-          .description-box {
-            padding: 15px;
-            border-radius: 10px !important;
-            background: #ffffff;
-            color: #667085;
-            font-size: 13px;
-          }
-
-          /* =================================================
-             RESPONSIVE
-          ================================================= */
-
           @media (max-width: 1200px) {
             .metrics-grid {
               grid-template-columns:
@@ -1688,6 +1900,7 @@ function Transactions() {
       </style>
 
       <Box className="transactions-container">
+
         {/* =================================================
             HEADER
         ================================================= */}
@@ -1704,8 +1917,9 @@ function Transactions() {
               </Typography>
 
               <Typography className="page-subtitle">
-                Monitor, search and review all banking
-                transactions
+                {isAdmin
+                  ? "Monitor, search and review all banking transactions"
+                  : "Monitor, search and review your transaction history"}
               </Typography>
             </Box>
           </Box>
@@ -1777,7 +1991,11 @@ function Transactions() {
             value={statistics.count.toLocaleString(
               "en-IN"
             )}
-            subtitle="All recorded transactions"
+            subtitle={
+              isAdmin
+                ? "All recorded transactions"
+                : "Your recorded transactions"
+            }
             icon={<History />}
             loading={loading}
             accent="blue"
@@ -1799,7 +2017,11 @@ function Transactions() {
             value={formatCompactCurrency(
               statistics.deposits
             )}
-            subtitle={`${statistics.completed} completed`}
+            subtitle={`${statistics.depositCount} deposit transaction${
+              statistics.depositCount !== 1
+                ? "s"
+                : ""
+            }`}
             icon={<ArrowDownward />}
             loading={loading}
             accent="purple"
@@ -1810,7 +2032,11 @@ function Transactions() {
             value={formatCompactCurrency(
               statistics.withdrawals
             )}
-            subtitle={`${statistics.pending} pending`}
+            subtitle={`${statistics.withdrawalCount} withdrawal transaction${
+              statistics.withdrawalCount !== 1
+                ? "s"
+                : ""
+            }`}
             icon={<ArrowUpward />}
             loading={loading}
             accent="orange"
@@ -1818,11 +2044,12 @@ function Transactions() {
         </Box>
 
         {/* =================================================
-            MAIN TABLE CARD
+            MAIN CARD
         ================================================= */}
 
         <Card className="transactions-card">
           <Box className="toolbar">
+
             <Box className="toolbar-top">
               <Box>
                 <Typography className="toolbar-title">
@@ -1832,7 +2059,8 @@ function Transactions() {
                 <Typography className="toolbar-description">
                   {filteredTransactions.length}{" "}
                   transaction
-                  {filteredTransactions.length !== 1
+                  {filteredTransactions.length !==
+                  1
                     ? "s"
                     : ""}{" "}
                   matching your filters
@@ -1851,16 +2079,19 @@ function Transactions() {
             </Box>
 
             <Box className="filter-row">
+
               {/* SEARCH */}
 
               <TextField
                 className="filter-control"
                 size="small"
                 fullWidth
-                placeholder="Search transaction ID, account, customer..."
+                placeholder="Search transaction ID, account..."
                 value={search}
                 onChange={(event) =>
-                  setSearch(event.target.value)
+                  setSearch(
+                    event.target.value
+                  )
                 }
                 InputProps={{
                   startAdornment: (
@@ -1916,7 +2147,9 @@ function Transactions() {
                 size="small"
                 fullWidth
               >
-                <InputLabel>Status</InputLabel>
+                <InputLabel>
+                  Status
+                </InputLabel>
 
                 <Select
                   value={statusFilter}
@@ -1947,7 +2180,9 @@ function Transactions() {
                 size="small"
                 fullWidth
               >
-                <InputLabel>Date Range</InputLabel>
+                <InputLabel>
+                  Date Range
+                </InputLabel>
 
                 <Select
                   value={dateFilter}
@@ -1981,12 +2216,13 @@ function Transactions() {
                 </Select>
               </FormControl>
 
-              <Tooltip title="Filter transactions">
+              <Tooltip title="Filters active">
                 <IconButton
                   sx={{
                     width: 42,
                     height: 42,
-                    border: "1px solid #dfe4ec",
+                    border:
+                      "1px solid #dfe4ec",
                     borderRadius: "9px",
                     color: hasFilters
                       ? "#2563eb"
@@ -2026,7 +2262,7 @@ function Transactions() {
                   </TableCell>
 
                   <TableCell>
-                    Customer
+                    Account ID
                   </TableCell>
 
                   <TableCell>
@@ -2047,16 +2283,22 @@ function Transactions() {
                 </TableRow>
               </TableHead>
 
+              {/* LOADING */}
+
               {loading ? (
                 <LoadingTable />
               ) : paginatedTransactions.length ===
                 0 ? (
+
+                /* EMPTY */
+
                 <TableBody>
                   <TableRow>
                     <TableCell
                       colSpan={8}
                       sx={{
-                        borderBottom: "none",
+                        borderBottom:
+                          "none",
                       }}
                     >
                       <Box className="empty-state">
@@ -2101,10 +2343,17 @@ function Transactions() {
                     </TableCell>
                   </TableRow>
                 </TableBody>
+
               ) : (
+
+                /* DATA */
+
                 <TableBody>
                   {paginatedTransactions.map(
-                    (transaction, index) => {
+                    (
+                      transaction,
+                      index
+                    ) => {
                       const type =
                         getTransactionType(
                           transaction
@@ -2116,10 +2365,9 @@ function Transactions() {
                         );
 
                       const amount =
-                        getAmount(transaction);
-
-                      const typeConfig =
-                        getTypeConfig(type);
+                        getAmount(
+                          transaction
+                        );
 
                       const rowKey =
                         getTransactionId(
@@ -2165,24 +2413,17 @@ function Transactions() {
 
                           <TableCell>
                             <Typography className="account-number">
-                              {getAccountNumber(
+                              {getAccountDisplay(
                                 transaction
                               )}
                             </Typography>
                           </TableCell>
 
-                          {/* CUSTOMER */}
+                          {/* ACCOUNT ID */}
 
                           <TableCell>
-                            <Typography className="customer-name">
-                              {getCustomerName(
-                                transaction
-                              )}
-                            </Typography>
-
-                            <Typography className="customer-id">
-                              ID:{" "}
-                              {getCustomerId(
+                            <Typography className="account-number">
+                              {getAccountIdDisplay(
                                 transaction
                               )}
                             </Typography>
@@ -2201,7 +2442,8 @@ function Transactions() {
                           <TableCell align="right">
                             <Typography
                               className={`amount ${
-                                type === "DEPOSIT"
+                                type ===
+                                "DEPOSIT"
                                   ? "deposit"
                                   : type ===
                                       "WITHDRAW" ||
@@ -2215,12 +2457,10 @@ function Transactions() {
                                 "DEPOSIT" &&
                                 "+"}
 
-                              {type ===
-                                "WITHDRAW" &&
-                                "-"}
-
-                              {type ===
-                                "WITHDRAWAL" &&
+                              {(type ===
+                                "WITHDRAW" ||
+                                type ===
+                                  "WITHDRAWAL") &&
                                 "-"}
 
                               {formatCurrency(
@@ -2269,31 +2509,52 @@ function Transactions() {
           ================================================= */}
 
           {!loading &&
-            sortedTransactions.length > 0 && (
+            sortedTransactions.length >
+              0 && (
               <Box className="pagination-bar">
                 <Typography className="result-count">
                   Showing{" "}
-                  {page * rowsPerPage + 1}–
+                  {page *
+                    rowsPerPage +
+                    1}
+                  –
                   {Math.min(
-                    (page + 1) * rowsPerPage,
+                    (page + 1) *
+                      rowsPerPage,
                     sortedTransactions.length
                   )}{" "}
-                  of {sortedTransactions.length}{" "}
+                  of{" "}
+                  {
+                    sortedTransactions.length
+                  }{" "}
                   transactions
                 </Typography>
 
                 <TablePagination
                   component="div"
-                  count={sortedTransactions.length}
+                  count={
+                    sortedTransactions.length
+                  }
                   page={page}
-                  onPageChange={(_, newPage) =>
+                  onPageChange={(
+                    _,
+                    newPage
+                  ) =>
                     setPage(newPage)
                   }
-                  rowsPerPage={rowsPerPage}
-                  onRowsPerPageChange={(event) => {
+                  rowsPerPage={
+                    rowsPerPage
+                  }
+                  onRowsPerPageChange={(
+                    event
+                  ) => {
                     setRowsPerPage(
-                      Number(event.target.value)
+                      Number(
+                        event.target
+                          .value
+                      )
                     );
+
                     setPage(0);
                   }}
                   rowsPerPageOptions={[
@@ -2319,9 +2580,13 @@ function Transactions() {
         ================================================= */}
 
         <TransactionDetails
-          transaction={selectedTransaction}
+          transaction={
+            selectedTransaction
+          }
           onClose={() =>
-            setSelectedTransaction(null)
+            setSelectedTransaction(
+              null
+            )
           }
         />
       </Box>

@@ -1,5 +1,6 @@
 package com.bank.bankmanagement.service;
 
+import com.bank.bankmanagement.dto.ReceiverAccountResponse;
 import com.bank.bankmanagement.dto.AccountRequest;
 import com.bank.bankmanagement.dto.AccountResponse;
 import com.bank.bankmanagement.dto.AccountUpdateRequest;
@@ -41,58 +42,86 @@ public class AccountService {
     }
 
     // =========================================================
-    // GET ACCOUNTS FOR CURRENT USER
-    // ADMIN -> ALL ACCOUNTS
-    // USER  -> OWN ACCOUNTS
+    // GET ACCOUNTS
+    //
+    // ADMIN -> ALL
+    // USER  -> OWN ONLY
     // =========================================================
 
     @Transactional(readOnly = true)
     public List<AccountResponse> getAccountsForCurrentUser() {
 
         Authentication authentication =
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication();
+                getAuthenticatedUser();
 
-        if (authentication == null ||
-                !authentication.isAuthenticated()) {
+        String username =
+                authentication.getName();
 
-            throw new BadRequestException(
-                    "Authentication is required"
-            );
+        if (isAdmin(authentication)) {
+
+            return accountRepository
+                    .findAllWithCustomer()
+                    .stream()
+                    .map(this::toAccountResponse)
+                    .toList();
         }
 
-        String username = authentication.getName();
-
-        boolean isAdmin =
-                authentication.getAuthorities()
-                        .stream()
-                        .anyMatch(authority ->
-                                "ROLE_ADMIN".equals(
-                                        authority.getAuthority()
-                                )
-                        );
-
-        List<Account> accounts;
-
-        if (isAdmin) {
-
-            accounts = accountRepository.findAllWithCustomer();
-
-        } else {
-
-            accounts =
-                    accountRepository
-                            .findAllByOwnerUsername(username);
-        }
-
-        return accounts.stream()
+        return accountRepository
+                .findAllByOwnerUsername(username)
+                .stream()
                 .map(this::toAccountResponse)
                 .toList();
     }
+    // =========================================================
+// LOOKUP RECEIVER
+//
+// USER can search for a specific account number.
+//
+// This does NOT require the receiver to belong to
+// the current user.
+//
+// Only minimal receiver information is returned.
+// =========================================================
+
+@Transactional(readOnly = true)
+public ReceiverAccountResponse lookupReceiver(
+        String accountNumber) {
+
+    if (accountNumber == null
+            || accountNumber.trim().isEmpty()) {
+
+        throw new BadRequestException(
+                "Account number is required"
+        );
+    }
+
+    String normalizedAccountNumber =
+            accountNumber.trim();
+
+    Account account =
+            accountRepository
+                    .findByAccountNumberWithCustomer(
+                            normalizedAccountNumber
+                    )
+                    .orElseThrow(() ->
+                            new NotFoundException(
+                                    "Receiver account not found"
+                            ));
+
+    return new ReceiverAccountResponse(
+            account.getId(),
+            account.getAccountNumber(),
+            account.getAccountType(),
+            account.getStatus(),
+            account.getCustomer().getName()
+    );
+}
 
     // =========================================================
     // DEPOSIT
+    //
+    // ADMIN -> ANY ACCOUNT
+    // USER  -> OWN ACCOUNT ONLY
     // =========================================================
 
     @Transactional
@@ -129,6 +158,9 @@ public class AccountService {
 
     // =========================================================
     // WITHDRAW
+    //
+    // ADMIN -> ANY ACCOUNT
+    // USER  -> OWN ACCOUNT ONLY
     // =========================================================
 
     @Transactional
@@ -173,21 +205,35 @@ public class AccountService {
 
     // =========================================================
     // TRANSFER
+    //
+    // USER:
+    //   fromAccount MUST belong to current user.
+    //
+    // ADMIN:
+    //   fromAccount can belong to anyone.
+    //
+    // Receiver can belong to another user.
     // =========================================================
 
     @Transactional
     public void transfer(
             TransferRequest request) {
 
-        if (request == null ||
-                request.getFromAccountId() == null ||
-                request.getToAccountId() == null ||
-                request.getAmount() == null) {
+        if (request == null
+                || request.getFromAccountId() == null
+                || request.getToAccountId() == null
+                || request.getAmount() == null) {
 
             throw new BadRequestException(
                     "Invalid transfer request"
             );
         }
+
+        Long fromAccountId =
+                request.getFromAccountId();
+
+        Long toAccountId =
+                request.getToAccountId();
 
         BigDecimal amount =
                 request.getAmount();
@@ -197,24 +243,36 @@ public class AccountService {
                 "Transfer"
         );
 
-        if (request.getFromAccountId()
-                .equals(request.getToAccountId())) {
+        if (fromAccountId.equals(toAccountId)) {
 
             throw new BadRequestException(
                     "Cannot transfer to the same account"
             );
         }
 
+        /*
+         * SECURITY CHECK:
+         *
+         * USER can only use their own account as
+         * the sender.
+         *
+         * ADMIN can use any account.
+         */
         Account fromAccount =
                 findAccountForCurrentUser(
-                        request.getFromAccountId()
+                        fromAccountId
                 );
 
+        /*
+         * Receiver does not need to belong to
+         * current user.
+         *
+         * A USER must be able to transfer money
+         * to another user's account.
+         */
         Account toAccount =
                 accountRepository
-                        .findByIdWithCustomer(
-                                request.getToAccountId()
-                        )
+                        .findByIdWithCustomer(toAccountId)
                         .orElseThrow(() ->
                                 new NotFoundException(
                                         "Receiver account not found"
@@ -256,12 +314,16 @@ public class AccountService {
     }
 
     // =========================================================
-    // CREATE ACCOUNT - ADMIN
+    // CREATE ACCOUNT
+    //
+    // Controller already restricts this to ADMIN.
     // =========================================================
 
     @Transactional
     public AccountResponse createAccount(
             AccountRequest request) {
+
+        requireAdmin();
 
         if (request == null) {
             throw new BadRequestException(
@@ -275,8 +337,8 @@ public class AccountService {
             );
         }
 
-        if (request.getAccountNumber() == null ||
-                request.getAccountNumber()
+        if (request.getAccountNumber() == null
+                || request.getAccountNumber()
                         .trim()
                         .isEmpty()) {
 
@@ -310,8 +372,7 @@ public class AccountService {
 
         Account account =
                 new Account(
-                        request.getAccountNumber()
-                                .trim(),
+                        request.getAccountNumber().trim(),
                         balance,
                         customer
                 );
@@ -324,6 +385,9 @@ public class AccountService {
 
     // =========================================================
     // GET ACCOUNT BY ID
+    //
+    // ADMIN -> ANY
+    // USER  -> OWN ONLY
     // =========================================================
 
     @Transactional(readOnly = true)
@@ -337,13 +401,17 @@ public class AccountService {
     }
 
     // =========================================================
-    // UPDATE ACCOUNT - ADMIN
+    // UPDATE ACCOUNT
+    //
+    // ADMIN ONLY
     // =========================================================
 
     @Transactional
     public AccountResponse updateAccount(
             Long id,
             AccountUpdateRequest request) {
+
+        requireAdmin();
 
         if (request == null) {
             throw new BadRequestException(
@@ -377,25 +445,27 @@ public class AccountService {
         }
 
         if (request.getAccountType() != null) {
-
             account.setAccountType(
                     request.getAccountType()
             );
         }
 
-        Account savedAccount =
-                accountRepository.save(account);
-
-        return toAccountResponse(savedAccount);
+        return toAccountResponse(
+                accountRepository.save(account)
+        );
     }
 
     // =========================================================
-    // BLOCK ACCOUNT - ADMIN
+    // BLOCK
+    //
+    // ADMIN ONLY
     // =========================================================
 
     @Transactional
     public AccountResponse blockAccount(
             Long id) {
+
+        requireAdmin();
 
         Account account =
                 accountRepository
@@ -405,8 +475,8 @@ public class AccountService {
                                         "Account not found"
                                 ));
 
-        if (account.getStatus() ==
-                AccountStatus.CLOSED) {
+        if (account.getStatus()
+                == AccountStatus.CLOSED) {
 
             throw new BadRequestException(
                     "Closed account cannot be blocked"
@@ -423,12 +493,16 @@ public class AccountService {
     }
 
     // =========================================================
-    // UNBLOCK ACCOUNT - ADMIN
+    // UNBLOCK
+    //
+    // ADMIN ONLY
     // =========================================================
 
     @Transactional
     public AccountResponse unblockAccount(
             Long id) {
+
+        requireAdmin();
 
         Account account =
                 accountRepository
@@ -438,8 +512,8 @@ public class AccountService {
                                         "Account not found"
                                 ));
 
-        if (account.getStatus() ==
-                AccountStatus.CLOSED) {
+        if (account.getStatus()
+                == AccountStatus.CLOSED) {
 
             throw new BadRequestException(
                     "Closed account cannot be unblocked"
@@ -456,12 +530,16 @@ public class AccountService {
     }
 
     // =========================================================
-    // CLOSE ACCOUNT - ADMIN
+    // CLOSE
+    //
+    // ADMIN ONLY
     // =========================================================
 
     @Transactional
     public AccountResponse closeAccount(
             Long id) {
+
+        requireAdmin();
 
         Account account =
                 accountRepository
@@ -471,8 +549,8 @@ public class AccountService {
                                         "Account not found"
                                 ));
 
-        if (account.getStatus() ==
-                AccountStatus.CLOSED) {
+        if (account.getStatus()
+                == AccountStatus.CLOSED) {
 
             throw new BadRequestException(
                     "Account is already closed"
@@ -497,12 +575,16 @@ public class AccountService {
     }
 
     // =========================================================
-    // DELETE ACCOUNT - ADMIN
+    // DELETE
+    //
+    // ADMIN ONLY
     // =========================================================
 
     @Transactional
     public void deleteAccount(
             Long id) {
+
+        requireAdmin();
 
         Account account =
                 accountRepository
@@ -517,37 +599,32 @@ public class AccountService {
 
     // =========================================================
     // FIND ACCOUNT FOR CURRENT USER
+    //
+    // THIS IS THE MAIN OWNERSHIP SECURITY METHOD.
     // =========================================================
 
     private Account findAccountForCurrentUser(
             Long id) {
 
-        Authentication authentication =
-                SecurityContextHolder
-                        .getContext()
-                        .getAuthentication();
-
-        if (authentication == null ||
-                !authentication.isAuthenticated()) {
+        if (id == null) {
 
             throw new BadRequestException(
-                    "Authentication is required"
+                    "Account ID is required"
             );
         }
+
+        Authentication authentication =
+                getAuthenticatedUser();
 
         String username =
                 authentication.getName();
 
-        boolean isAdmin =
-                authentication.getAuthorities()
-                        .stream()
-                        .anyMatch(authority ->
-                                "ROLE_ADMIN".equals(
-                                        authority.getAuthority()
-                                )
-                        );
-
-        if (isAdmin) {
+        /*
+         * ADMIN:
+         *
+         * Can access any account.
+         */
+        if (isAdmin(authentication)) {
 
             return accountRepository
                     .findByIdWithCustomer(id)
@@ -557,6 +634,22 @@ public class AccountService {
                             ));
         }
 
+        /*
+         * USER:
+         *
+         * The SQL query itself verifies ownership.
+         *
+         * We do NOT:
+         *
+         * 1. Load account by ID first
+         * 2. Then check ownership later
+         *
+         * Instead the database query requires:
+         *
+         * account.id = requested ID
+         * AND
+         * owner.username = authenticated username
+         */
         return accountRepository
                 .findByIdAndOwnerUsername(
                         id,
@@ -569,27 +662,84 @@ public class AccountService {
     }
 
     // =========================================================
+    // GET AUTHENTICATED USER
+    // =========================================================
+
+    private Authentication getAuthenticatedUser() {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication.getName() == null
+                || authentication.getName().isBlank()) {
+
+            throw new BadRequestException(
+                    "Authentication is required"
+            );
+        }
+
+        return authentication;
+    }
+
+    // =========================================================
+    // CHECK ADMIN
+    // =========================================================
+
+    private boolean isAdmin(
+            Authentication authentication) {
+
+        return authentication
+                .getAuthorities()
+                .stream()
+                .anyMatch(authority ->
+                        "ROLE_ADMIN".equals(
+                                authority.getAuthority()
+                        ));
+    }
+
+    // =========================================================
+    // REQUIRE ADMIN
+    // =========================================================
+
+    private void requireAdmin() {
+
+        Authentication authentication =
+                getAuthenticatedUser();
+
+        if (!isAdmin(authentication)) {
+
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Admin access required"
+            );
+        }
+    }
+
+    // =========================================================
     // VALIDATE ACCOUNT STATUS
     // =========================================================
 
     private void validateAccountActive(
             Account account) {
 
-        if (account.getStatus() !=
-                AccountStatus.ACTIVE) {
+        if (account.getStatus()
+                != AccountStatus.ACTIVE) {
 
             throw new BadRequestException(
-                    "Account is " +
-                    account.getStatus()
+                    "Account is "
+                            + account.getStatus()
                             .name()
-                            .toLowerCase() +
-                    " and cannot perform this transaction"
+                            .toLowerCase()
+                            + " and cannot perform this transaction"
             );
         }
     }
 
     // =========================================================
-    // ACCOUNT RESPONSE MAPPER
+    // ACCOUNT RESPONSE
     // =========================================================
 
     private AccountResponse toAccountResponse(
@@ -619,15 +769,14 @@ public class AccountService {
             BigDecimal amount,
             String operation) {
 
-        if (amount == null ||
-                amount.compareTo(
+        if (amount == null
+                || amount.compareTo(
                         BigDecimal.ZERO) <= 0) {
 
             throw new BadRequestException(
-                    operation +
-                    " amount must be greater than zero"
+                    operation
+                            + " amount must be greater than zero"
             );
         }
     }
 }
-
