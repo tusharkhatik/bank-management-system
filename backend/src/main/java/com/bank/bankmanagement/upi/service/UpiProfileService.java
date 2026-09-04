@@ -54,6 +54,32 @@ public class UpiProfileService {
     }
 
     // =========================================================
+    // CHECK ADMIN
+    // =========================================================
+
+    private boolean isAdmin() {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null ||
+                authentication.getAuthorities() == null) {
+
+            return false;
+        }
+
+        return authentication.getAuthorities()
+                .stream()
+                .anyMatch(authority ->
+                        "ROLE_ADMIN".equals(
+                                authority.getAuthority()
+                        )
+                );
+    }
+
+    // =========================================================
     // CREATE UPI PROFILE
     // =========================================================
 
@@ -122,6 +148,9 @@ public class UpiProfileService {
 
         // -----------------------------------------------------
         // Account must belong to authenticated user
+        //
+        // This prevents a USER from creating a UPI profile
+        // for somebody else's account.
         // -----------------------------------------------------
 
         Account account =
@@ -178,8 +207,12 @@ public class UpiProfileService {
     }
 
     // =========================================================
-    // GET BY UPI ID
-    // Used for receiver verification
+    // GET UPI PROFILE BY UPI ID
+    //
+    // Used when verifying a receiver.
+    //
+    // A logged-in user is allowed to find another user's
+    // UPI profile because that is required for payment.
     // =========================================================
 
     public UpiProfile getByUpiId(String upiId) {
@@ -210,6 +243,8 @@ public class UpiProfileService {
 
     // =========================================================
     // VERIFY UPI ID BELONGS TO CURRENT USER
+    //
+    // Used by UPI payment service to verify the sender.
     // =========================================================
 
     public UpiProfile getMyProfileByUpiId(
@@ -245,6 +280,9 @@ public class UpiProfileService {
 
     // =========================================================
     // GET BY ACCOUNT ID
+    //
+    // USER  -> only their own account
+    // ADMIN -> any account
     // =========================================================
 
     public UpiProfile getByAccountId(
@@ -257,8 +295,43 @@ public class UpiProfileService {
             );
         }
 
+        // -----------------------------------------------------
+        // ADMIN can access any account's UPI profile
+        // -----------------------------------------------------
+
+        if (isAdmin()) {
+
+            return upiProfileRepository
+                    .findByAccount_Id(accountId)
+                    .orElseThrow(() ->
+                            new ResponseStatusException(
+                                    HttpStatus.NOT_FOUND,
+                                    "UPI profile not found"
+                            )
+                    );
+        }
+
+        // -----------------------------------------------------
+        // USER can access only their own account
+        // -----------------------------------------------------
+
+        String username = getCurrentUsername();
+
+        Account account =
+                accountRepository
+                        .findByIdAndOwnerUsername(
+                                accountId,
+                                username
+                        )
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.FORBIDDEN,
+                                        "You do not own this account"
+                                )
+                        );
+
         return upiProfileRepository
-                .findByAccount_Id(accountId)
+                .findByAccount_Id(account.getId())
                 .orElseThrow(() ->
                         new ResponseStatusException(
                                 HttpStatus.NOT_FOUND,
@@ -269,6 +342,11 @@ public class UpiProfileService {
 
     // =========================================================
     // UPDATE STATUS
+    //
+    // ADMIN ONLY
+    //
+    // Controller also has @PreAuthorize("hasRole('ADMIN')")
+    // so this service-level check provides defense in depth.
     // =========================================================
 
     public UpiProfile updateStatus(
@@ -279,6 +357,13 @@ public class UpiProfileService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Profile ID is required"
+            );
+        }
+
+        if (!isAdmin()) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Only administrators can update UPI profile status"
             );
         }
 

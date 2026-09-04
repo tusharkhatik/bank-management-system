@@ -4,8 +4,10 @@ import com.bank.bankmanagement.upi.dto.CreateUpiProfileRequest;
 import com.bank.bankmanagement.upi.dto.UpiProfileResponse;
 import com.bank.bankmanagement.upi.model.UpiProfile;
 import com.bank.bankmanagement.upi.service.UpiProfileService;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,14 +16,20 @@ public class UpiProfileController {
 
     private final UpiProfileService upiProfileService;
 
-    public UpiProfileController(UpiProfileService upiProfileService) {
+    public UpiProfileController(
+            UpiProfileService upiProfileService) {
+
         this.upiProfileService = upiProfileService;
     }
 
+    // =========================================================
+    // CREATE UPI PROFILE
+    // =========================================================
+
     @PostMapping("/profile")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UpiProfileResponse> createProfile(
-            @RequestBody CreateUpiProfileRequest request
-    ) {
+            @RequestBody CreateUpiProfileRequest request) {
 
         UpiProfile profile =
                 upiProfileService.createProfile(request);
@@ -31,10 +39,15 @@ public class UpiProfileController {
                 .body(new UpiProfileResponse(profile));
     }
 
+    // =========================================================
+    // GET UPI PROFILE BY UPI ID
+    // Used for receiver verification
+    // =========================================================
+
     @GetMapping("/profile/{upiId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UpiProfileResponse> getByUpiId(
-            @PathVariable String upiId
-    ) {
+            @PathVariable String upiId) {
 
         return ResponseEntity.ok(
                 new UpiProfileResponse(
@@ -43,10 +56,17 @@ public class UpiProfileController {
         );
     }
 
+    // =========================================================
+    // GET UPI PROFILE BY ACCOUNT ID
+    //
+    // USER  -> only their own account
+    // ADMIN -> any account
+    // =========================================================
+
     @GetMapping("/profile/account/{accountId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UpiProfileResponse> getByAccountId(
-            @PathVariable Long accountId
-    ) {
+            @PathVariable Long accountId) {
 
         return ResponseEntity.ok(
                 new UpiProfileResponse(
@@ -55,11 +75,17 @@ public class UpiProfileController {
         );
     }
 
+    // =========================================================
+    // UPDATE UPI PROFILE STATUS
+    //
+    // ADMIN ONLY
+    // =========================================================
+
     @PatchMapping("/profile/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UpiProfileResponse> updateStatus(
             @PathVariable Long id,
-            @RequestParam boolean active
-    ) {
+            @RequestParam boolean active) {
 
         return ResponseEntity.ok(
                 new UpiProfileResponse(
@@ -67,14 +93,19 @@ public class UpiProfileController {
                 )
         );
     }
-@GetMapping("/profile/me")
-public ResponseEntity<UpiProfileResponse> getMyProfile() {
 
-    return ResponseEntity.ok(
-            new UpiProfileResponse(
-                    upiProfileService.getMyProfile()
-            )
-    );
-}
+    // =========================================================
+    // GET CURRENT USER'S UPI PROFILE
+    // =========================================================
 
+    @GetMapping("/profile/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<UpiProfileResponse> getMyProfile() {
+
+        return ResponseEntity.ok(
+                new UpiProfileResponse(
+                        upiProfileService.getMyProfile()
+                )
+        );
+    }
 }

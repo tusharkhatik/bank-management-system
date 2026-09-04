@@ -33,7 +33,6 @@ import {
   Divider,
   IconButton,
   InputAdornment,
-  Paper,
   Snackbar,
   Stack,
   TextField,
@@ -91,6 +90,30 @@ const getAccountType = (account) => {
   );
 };
 
+const getCurrentUserRole = () => {
+  try {
+    const storedUser = localStorage.getItem("user");
+
+    if (!storedUser) {
+      return "USER";
+    }
+
+    const user = JSON.parse(storedUser);
+
+    return String(user?.role || "")
+      .trim()
+      .toUpperCase()
+      .replace(/^ROLE_/, "");
+  } catch (error) {
+    console.error(
+      "Failed to read current user role:",
+      error
+    );
+
+    return "USER";
+  }
+};
+
 /* =========================================================
    ACCOUNTS
 ========================================================= */
@@ -131,6 +154,9 @@ function Accounts() {
     type: "success",
     message: "",
   });
+
+  const isAdmin =
+    getCurrentUserRole() === "ADMIN";
 
   /* =======================================================
      LOAD ACCOUNTS
@@ -197,6 +223,14 @@ function Accounts() {
   ======================================================= */
 
   const validateForm = () => {
+    if (!isAdmin) {
+      setError(
+        "You do not have permission to manage accounts."
+      );
+
+      return false;
+    }
+
     if (!accountType) {
       setError("Account type is required.");
       return false;
@@ -249,6 +283,14 @@ function Accounts() {
 
   const handleCreateAccount = async (event) => {
     event.preventDefault();
+
+    if (!isAdmin) {
+      setError(
+        "You do not have permission to create accounts."
+      );
+
+      return;
+    }
 
     setError("");
     setMessage("");
@@ -316,6 +358,15 @@ function Accounts() {
   ======================================================= */
 
   const handleEdit = (account) => {
+    if (!isAdmin) {
+      showToast(
+        "error",
+        "You do not have permission to edit accounts."
+      );
+
+      return;
+    }
+
     setEditingId(account.id);
 
     setAccountNumber(
@@ -351,6 +402,14 @@ function Accounts() {
 
   const handleUpdateAccount = async (event) => {
     event.preventDefault();
+
+    if (!isAdmin) {
+      setError(
+        "You do not have permission to update accounts."
+      );
+
+      return;
+    }
 
     setError("");
     setMessage("");
@@ -433,6 +492,15 @@ function Accounts() {
   ======================================================= */
 
   const openDeleteDialog = (account) => {
+    if (!isAdmin) {
+      showToast(
+        "error",
+        "You do not have permission to delete accounts."
+      );
+
+      return;
+    }
+
     setAccountToDelete(account);
     setDeleteDialogOpen(true);
   };
@@ -447,6 +515,14 @@ function Accounts() {
   };
 
   const handleDelete = async () => {
+    if (!isAdmin) {
+      setError(
+        "You do not have permission to delete accounts."
+      );
+
+      return;
+    }
+
     if (!accountToDelete?.id) {
       return;
     }
@@ -773,33 +849,35 @@ function Accounts() {
               Refresh
             </Button>
 
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => {
-                resetForm();
+            {isAdmin && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => {
+                  resetForm();
 
-                window.scrollTo({
-                  top: 0,
-                  behavior: "smooth",
-                });
-              }}
-              sx={{
-                height: 42,
-                borderRadius: 2,
-                textTransform: "none",
-                fontWeight: 800,
-                bgcolor: "#1570ef",
-                boxShadow:
-                  "0 4px 12px rgba(21,112,239,.2)",
+                  window.scrollTo({
+                    top: 0,
+                    behavior: "smooth",
+                  });
+                }}
+                sx={{
+                  height: 42,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 800,
+                  bgcolor: "#1570ef",
+                  boxShadow:
+                    "0 4px 12px rgba(21,112,239,.2)",
 
-                "&:hover": {
-                  bgcolor: "#175cd3",
-                },
-              }}
-            >
-              New Account
-            </Button>
+                  "&:hover": {
+                    bgcolor: "#175cd3",
+                  },
+                }}
+              >
+                New Account
+              </Button>
+            )}
           </Stack>
         </Stack>
 
@@ -900,313 +978,315 @@ function Accounts() {
 
           <Stack spacing={3}>
 
-            {/* FORM */}
+            {/* FORM - ADMIN ONLY */}
 
-            <Card
-              sx={{
-                borderRadius: 3,
-                border:
-                  "1px solid #e4e7ec",
-                boxShadow:
-                  "0 8px 25px rgba(16,24,40,.05)",
-              }}
-            >
-              <CardContent
+            {isAdmin && (
+              <Card
                 sx={{
-                  p: {
-                    xs: 2,
-                    sm: 3,
-                    md: 3.5,
-                  },
+                  borderRadius: 3,
+                  border:
+                    "1px solid #e4e7ec",
+                  boxShadow:
+                    "0 8px 25px rgba(16,24,40,.05)",
                 }}
               >
-                <Stack
-                  direction="row"
-                  spacing={1.5}
+                <CardContent
                   sx={{
-                    alignItems: "center",
-                    mb: 3,
+                    p: {
+                      xs: 2,
+                      sm: 3,
+                      md: 3.5,
+                    },
                   }}
                 >
-                  <Avatar
-                    sx={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 2,
-                      bgcolor: editingId
-                        ? "#fff7ed"
-                        : "#eff8ff",
-                      color: editingId
-                        ? "#c2410c"
-                        : "#1570ef",
-                    }}
-                  >
-                    {editingId ? (
-                      <Edit />
-                    ) : (
-                      <Add />
-                    )}
-                  </Avatar>
-
-                  <Box>
-                    <Typography
-                      sx={{
-                        fontWeight: 850,
-                        fontSize: "1.1rem",
-                        color: "#101828",
-                      }}
-                    >
-                      {editingId
-                        ? "Edit Account"
-                        : "Create New Account"}
-                    </Typography>
-
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        mt: 0.3,
-                        color: "#667085",
-                      }}
-                    >
-                      {editingId
-                        ? "Update the account information below."
-                        : "Enter the account and customer information."}
-                    </Typography>
-                  </Box>
-                </Stack>
-
-                <Divider sx={{ mb: 3 }} />
-
-                <form
-                  onSubmit={
-                    editingId
-                      ? handleUpdateAccount
-                      : handleCreateAccount
-                  }
-                >
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        md: "repeat(2, 1fr)",
-                      },
-                      gap: 2,
-                    }}
-                  >
-
-                    {/* ACCOUNT TYPE */}
-
-                    <TextField
-                      select
-                      fullWidth
-                      label="Account Type"
-                      value={accountType}
-                      onChange={(event) =>
-                        setAccountType(
-                          event.target.value
-                        )
-                      }
-                      disabled={submitting}
-                      required
-                      SelectProps={{
-                        native: true,
-                      }}
-                      sx={inputStyles}
-                    >
-                      <option value="SAVINGS">
-                        Savings Account
-                      </option>
-
-                      <option value="CURRENT">
-                        Current Account
-                      </option>
-                    </TextField>
-
-                    {/* ACCOUNT NUMBER */}
-
-                    <TextField
-                      fullWidth
-                      label="Account Number"
-                      placeholder="Example: ACC10005"
-                      value={accountNumber}
-                      onChange={(event) =>
-                        setAccountNumber(
-                          event.target.value
-                        )
-                      }
-                      disabled={submitting}
-                      required
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <AccountBalance
-                              sx={{
-                                color:
-                                  "#98a2b3",
-                              }}
-                            />
-                          </InputAdornment>
-                        ),
-                      }}
-                      sx={inputStyles}
-                    />
-
-                    {/* CUSTOMER ID */}
-
-                    <TextField
-                      fullWidth
-                      label="Customer ID"
-                      type="number"
-                      inputProps={{
-                        min: 1,
-                      }}
-                      placeholder="Example: 2"
-                      value={customerId}
-                      onChange={(event) =>
-                        setCustomerId(
-                          event.target.value
-                        )
-                      }
-                      disabled={submitting}
-                      required
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <People
-                              sx={{
-                                color:
-                                  "#98a2b3",
-                              }}
-                            />
-                          </InputAdornment>
-                        ),
-                      }}
-                      sx={inputStyles}
-                    />
-
-                    {/* OPENING BALANCE */}
-
-                    <TextField
-                      fullWidth
-                      label="Opening Balance"
-                      type="number"
-                      inputProps={{
-                        min: 0,
-                        step: "0.01",
-                      }}
-                      placeholder="0.00"
-                      value={balance}
-                      onChange={(event) =>
-                        setBalance(
-                          event.target.value
-                        )
-                      }
-                      disabled={submitting}
-                      required
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <Typography
-                              sx={{
-                                fontWeight: 900,
-                                color:
-                                  "#344054",
-                              }}
-                            >
-                              ₹
-                            </Typography>
-                          </InputAdornment>
-                        ),
-                      }}
-                      sx={{
-                        ...inputStyles,
-
-                        "& .MuiInputBase-input":
-                          {
-                            fontWeight: 750,
-                          },
-                      }}
-                    />
-
-                  </Box>
-
                   <Stack
-                    direction={{
-                      xs: "column",
-                      sm: "row",
-                    }}
+                    direction="row"
                     spacing={1.5}
                     sx={{
-                      mt: 3,
+                      alignItems: "center",
+                      mb: 3,
                     }}
                   >
-                    {editingId && (
+                    <Avatar
+                      sx={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 2,
+                        bgcolor: editingId
+                          ? "#fff7ed"
+                          : "#eff8ff",
+                        color: editingId
+                          ? "#c2410c"
+                          : "#1570ef",
+                      }}
+                    >
+                      {editingId ? (
+                        <Edit />
+                      ) : (
+                        <Add />
+                      )}
+                    </Avatar>
+
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontWeight: 850,
+                          fontSize: "1.1rem",
+                          color: "#101828",
+                        }}
+                      >
+                        {editingId
+                          ? "Edit Account"
+                          : "Create New Account"}
+                      </Typography>
+
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          mt: 0.3,
+                          color: "#667085",
+                        }}
+                      >
+                        {editingId
+                          ? "Update the account information below."
+                          : "Enter the account and customer information."}
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Divider sx={{ mb: 3 }} />
+
+                  <form
+                    onSubmit={
+                      editingId
+                        ? handleUpdateAccount
+                        : handleCreateAccount
+                    }
+                  >
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          md: "repeat(2, 1fr)",
+                        },
+                        gap: 2,
+                      }}
+                    >
+
+                      {/* ACCOUNT TYPE */}
+
+                      <TextField
+                        select
+                        fullWidth
+                        label="Account Type"
+                        value={accountType}
+                        onChange={(event) =>
+                          setAccountType(
+                            event.target.value
+                          )
+                        }
+                        disabled={submitting}
+                        required
+                        SelectProps={{
+                          native: true,
+                        }}
+                        sx={inputStyles}
+                      >
+                        <option value="SAVINGS">
+                          Savings Account
+                        </option>
+
+                        <option value="CURRENT">
+                          Current Account
+                        </option>
+                      </TextField>
+
+                      {/* ACCOUNT NUMBER */}
+
+                      <TextField
+                        fullWidth
+                        label="Account Number"
+                        placeholder="Example: ACC10005"
+                        value={accountNumber}
+                        onChange={(event) =>
+                          setAccountNumber(
+                            event.target.value
+                          )
+                        }
+                        disabled={submitting}
+                        required
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <AccountBalance
+                                sx={{
+                                  color:
+                                    "#98a2b3",
+                                }}
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={inputStyles}
+                      />
+
+                      {/* CUSTOMER ID */}
+
+                      <TextField
+                        fullWidth
+                        label="Customer ID"
+                        type="number"
+                        inputProps={{
+                          min: 1,
+                        }}
+                        placeholder="Example: 2"
+                        value={customerId}
+                        onChange={(event) =>
+                          setCustomerId(
+                            event.target.value
+                          )
+                        }
+                        disabled={submitting}
+                        required
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <People
+                                sx={{
+                                  color:
+                                    "#98a2b3",
+                                }}
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={inputStyles}
+                      />
+
+                      {/* OPENING BALANCE */}
+
+                      <TextField
+                        fullWidth
+                        label="Opening Balance"
+                        type="number"
+                        inputProps={{
+                          min: 0,
+                          step: "0.01",
+                        }}
+                        placeholder="0.00"
+                        value={balance}
+                        onChange={(event) =>
+                          setBalance(
+                            event.target.value
+                          )
+                        }
+                        disabled={submitting}
+                        required
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <Typography
+                                sx={{
+                                  fontWeight: 900,
+                                  color:
+                                    "#344054",
+                                }}
+                              >
+                                ₹
+                              </Typography>
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={{
+                          ...inputStyles,
+
+                          "& .MuiInputBase-input":
+                            {
+                              fontWeight: 750,
+                            },
+                        }}
+                      />
+
+                    </Box>
+
+                    <Stack
+                      direction={{
+                        xs: "column",
+                        sm: "row",
+                      }}
+                      spacing={1.5}
+                      sx={{
+                        mt: 3,
+                      }}
+                    >
+                      {editingId && (
+                        <Button
+                          type="button"
+                          variant="outlined"
+                          startIcon={<Close />}
+                          onClick={
+                            handleCancelEdit
+                          }
+                          disabled={submitting}
+                          sx={{
+                            minHeight: 48,
+                            borderRadius: 2,
+                            textTransform:
+                              "none",
+                            fontWeight: 750,
+                            borderColor:
+                              "#d0d5dd",
+                            color: "#344054",
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+
                       <Button
-                        type="button"
-                        variant="outlined"
-                        startIcon={<Close />}
-                        onClick={
-                          handleCancelEdit
+                        type="submit"
+                        variant="contained"
+                        startIcon={
+                          submitting ? (
+                            <CircularProgress
+                              size={18}
+                              color="inherit"
+                            />
+                          ) : editingId ? (
+                            <Edit />
+                          ) : (
+                            <Add />
+                          )
                         }
                         disabled={submitting}
                         sx={{
                           minHeight: 48,
+                          flex: 1,
                           borderRadius: 2,
                           textTransform:
                             "none",
-                          fontWeight: 750,
-                          borderColor:
-                            "#d0d5dd",
-                          color: "#344054",
+                          fontWeight: 800,
+                          bgcolor: "#1570ef",
+
+                          "&:hover": {
+                            bgcolor: "#175cd3",
+                          },
                         }}
                       >
-                        Cancel
+                        {submitting
+                          ? editingId
+                            ? "Updating..."
+                            : "Creating..."
+                          : editingId
+                          ? "Update Account"
+                          : "Create Account"}
                       </Button>
-                    )}
-
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      startIcon={
-                        submitting ? (
-                          <CircularProgress
-                            size={18}
-                            color="inherit"
-                          />
-                        ) : editingId ? (
-                          <Edit />
-                        ) : (
-                          <Add />
-                        )
-                      }
-                      disabled={submitting}
-                      sx={{
-                        minHeight: 48,
-                        flex: 1,
-                        borderRadius: 2,
-                        textTransform:
-                          "none",
-                        fontWeight: 800,
-                        bgcolor: "#1570ef",
-
-                        "&:hover": {
-                          bgcolor: "#175cd3",
-                        },
-                      }}
-                    >
-                      {submitting
-                        ? editingId
-                          ? "Updating..."
-                          : "Creating..."
-                        : editingId
-                        ? "Update Account"
-                        : "Create Account"}
-                    </Button>
-                  </Stack>
-                </form>
-              </CardContent>
-            </Card>
+                    </Stack>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
 
             {/* ACCOUNT LIST */}
 
@@ -1349,7 +1429,9 @@ function Accounts() {
                   >
                     {search
                       ? "Try a different search term."
-                      : "Create your first bank account to get started."}
+                      : isAdmin
+                      ? "Create your first bank account to get started."
+                      : "No bank accounts are available."}
                   </Typography>
                 </Box>
               ) : (
@@ -1374,6 +1456,7 @@ function Accounts() {
                           copyAccountNumber
                         }
                         disabled={submitting}
+                        isAdmin={isAdmin}
                       />
                     )
                   )}
@@ -1504,9 +1587,9 @@ function Accounts() {
                         lineHeight: 1.6,
                       }}
                     >
-                      Create, update and
-                      manage customer bank
-                      accounts from one place.
+                      {isAdmin
+                        ? "Create, update and manage customer bank accounts from one place."
+                        : "View your available bank accounts and account information."}
                     </Typography>
                   </Box>
                 </Stack>
@@ -1522,7 +1605,7 @@ function Accounts() {
       ===================================================== */}
 
       <Dialog
-        open={deleteDialogOpen}
+        open={deleteDialogOpen && isAdmin}
         onClose={closeDeleteDialog}
         fullWidth
         maxWidth="xs"
@@ -1823,6 +1906,7 @@ function AccountRow({
   onView,
   onCopy,
   disabled,
+  isAdmin,
 }) {
   const balance = Number(
     account.balance || 0
@@ -2082,33 +2166,37 @@ function AccountRow({
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Edit">
-            <IconButton
-              onClick={() =>
-                onEdit(account)
-              }
-              disabled={disabled}
-              sx={{
-                color: "#1570ef",
-              }}
-            >
-              <Edit />
-            </IconButton>
-          </Tooltip>
+          {isAdmin && (
+            <Tooltip title="Edit">
+              <IconButton
+                onClick={() =>
+                  onEdit(account)
+                }
+                disabled={disabled}
+                sx={{
+                  color: "#1570ef",
+                }}
+              >
+                <Edit />
+              </IconButton>
+            </Tooltip>
+          )}
 
-          <Tooltip title="Delete">
-            <IconButton
-              onClick={() =>
-                onDelete(account)
-              }
-              disabled={disabled}
-              sx={{
-                color: "#d92d20",
-              }}
-            >
-              <Delete />
-            </IconButton>
-          </Tooltip>
+          {isAdmin && (
+            <Tooltip title="Delete">
+              <IconButton
+                onClick={() =>
+                  onDelete(account)
+                }
+                disabled={disabled}
+                sx={{
+                  color: "#d92d20",
+                }}
+              >
+                <Delete />
+              </IconButton>
+            </Tooltip>
+          )}
         </Stack>
       </Stack>
     </Box>
