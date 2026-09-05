@@ -25,9 +25,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(
-            JwtAuthenticationFilter jwtAuthenticationFilter) {
-
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
@@ -39,11 +37,7 @@ public class SecurityConfig {
                 // =====================================================
                 // CORS
                 // =====================================================
-                .cors(cors ->
-                        cors.configurationSource(
-                                corsConfigurationSource()
-                        )
-                )
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 // =====================================================
                 // CSRF
@@ -104,43 +98,41 @@ public class SecurityConfig {
                 // =====================================================
                 .authorizeHttpRequests(auth -> auth
 
-                        // Authentication
-                        .requestMatchers(
-                                "/api/auth/**"
-                        ).permitAll()
+                        // Authentication APIs
+                        .requestMatchers("/api/auth/**").permitAll()
 
-                        // CORS preflight
+                        // CORS preflight requests
                         .requestMatchers(
                                 HttpMethod.OPTIONS,
                                 "/**"
                         ).permitAll()
 
-                        // Health
+                        // Health check
                         .requestMatchers(
                                 "/actuator/health"
                         ).permitAll()
 
-                        // ADMIN
+                        // Admin APIs
                         .requestMatchers(
                                 "/api/admin/**"
                         ).hasRole("ADMIN")
 
-                        // TRANSACTIONS
+                        // Transaction APIs
                         .requestMatchers(
                                 "/api/transactions/**"
                         ).authenticated()
 
-                        // UPI
+                        // UPI APIs
                         .requestMatchers(
                                 "/api/upi/**"
                         ).authenticated()
 
-                        // ACCOUNTS
+                        // Account APIs
                         .requestMatchers(
                                 "/api/accounts/**"
                         ).authenticated()
 
-                        // Remaining APIs
+                        // Other APIs
                         .requestMatchers(
                                 "/api/**"
                         ).authenticated()
@@ -181,51 +173,57 @@ public class SecurityConfig {
     }
 
     // =============================================================
-    // CORS
+    // CORS CONFIGURATION
     // =============================================================
 
-  @Bean
-public CorsConfigurationSource corsConfigurationSource() {
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
 
-    CorsConfiguration configuration = new CorsConfiguration();
+        CorsConfiguration configuration = new CorsConfiguration();
 
-    configuration.setAllowedOriginPatterns(
-            List.of(
-                    "http://localhost:*",
-                    "http://127.0.0.1:*",
-                    "http://192.168.*.*:*"
-            )
-    );
+        // Allowed frontend origins
+        configuration.setAllowedOrigins(
+                List.of(
+                        "http://localhost:5173",
+                        "http://127.0.0.1:5173",
+                        "https://bank-management-system-w0ti.onrender.com"
+                )
+        );
 
-    configuration.setAllowedMethods(
-            List.of(
-                    "GET",
-                    "POST",
-                    "PUT",
-                    "PATCH",
-                    "DELETE",
-                    "OPTIONS"
-            )
-    );
+        // Allowed HTTP methods
+        configuration.setAllowedMethods(
+                List.of(
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS"
+                )
+        );
 
-    configuration.setAllowedHeaders(
-            List.of("*")
-    );
+        // Allow request headers
+        configuration.setAllowedHeaders(
+                List.of("*")
+        );
 
-    configuration.setExposedHeaders(
-            List.of("Authorization")
-    );
+        // Expose Authorization header
+        configuration.setExposedHeaders(
+                List.of("Authorization")
+        );
 
-    configuration.setAllowCredentials(true);
+        // Allow credentials
+        configuration.setAllowCredentials(true);
 
-    UrlBasedCorsConfigurationSource source =
-            new UrlBasedCorsConfigurationSource();
+        // Apply CORS configuration to all endpoints
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
 
-    source.registerCorsConfiguration(
-            "/**",
-            configuration
-    );
+        source.registerCorsConfiguration(
+                "/**",
+                configuration
+        );
 
-    return source;
-}
+        return source;
+    }
 }
