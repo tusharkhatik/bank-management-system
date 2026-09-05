@@ -47,9 +47,12 @@ export default function Login() {
   ========================================================= */
 
   const [form, setForm] = useState({
+    name: "",
     username: "",
     password: "",
     confirmPassword: "",
+    email: "",
+    phone: "",
     role: "USER",
   });
 
@@ -68,9 +71,12 @@ export default function Login() {
   const [success, setSuccess] = useState("");
 
   const [fieldErrors, setFieldErrors] = useState({
+    name: "",
     username: "",
     password: "",
     confirmPassword: "",
+    email: "",
+    phone: "",
     role: "",
   });
 
@@ -149,9 +155,12 @@ export default function Login() {
     setSuccess("");
 
     setFieldErrors({
+      name: "",
       username: "",
       password: "",
       confirmPassword: "",
+      email: "",
+      phone: "",
       role: "",
     });
 
@@ -168,21 +177,48 @@ export default function Login() {
   ========================================================= */
 
   const validateForm = () => {
+    const name = form.name.trim();
     const username = form.username.trim();
     const password = form.password;
     const confirmPassword = form.confirmPassword;
+    const email = form.email.trim();
+    const phone = form.phone.trim();
     const role = form.role;
 
     const errors = {
+      name: "",
       username: "",
       password: "",
       confirmPassword: "",
+      email: "",
+      phone: "",
       role: "",
     };
+
+    /* ---------------------------------------------------------
+       LOGIN ROLE VALIDATION
+    --------------------------------------------------------- */
 
     if (!isSignUp && !role) {
       errors.role = "Please select account type.";
     }
+
+    /* ---------------------------------------------------------
+       SIGN UP NAME VALIDATION
+    --------------------------------------------------------- */
+
+    if (isSignUp) {
+      if (!name) {
+        errors.name = "Name is required.";
+      } else if (name.length < 3) {
+        errors.name =
+          "Name must contain at least 3 characters.";
+      }
+    }
+
+    /* ---------------------------------------------------------
+       USERNAME VALIDATION
+    --------------------------------------------------------- */
 
     if (!username) {
       errors.username = "Username is required.";
@@ -191,6 +227,10 @@ export default function Login() {
         "Username must contain at least 3 characters.";
     }
 
+    /* ---------------------------------------------------------
+       PASSWORD VALIDATION
+    --------------------------------------------------------- */
+
     if (!password) {
       errors.password = "Password is required.";
     } else if (password.length < 6) {
@@ -198,7 +238,26 @@ export default function Login() {
         "Password must contain at least 6 characters.";
     }
 
+    /* ---------------------------------------------------------
+       SIGN UP EMAIL / PHONE / CONFIRM PASSWORD
+    --------------------------------------------------------- */
+
     if (isSignUp) {
+      if (!email) {
+        errors.email = "Email is required.";
+      } else if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      ) {
+        errors.email = "Enter a valid email address.";
+      }
+
+      if (!phone) {
+        errors.phone = "Phone is required.";
+      } else if (!/^\d{10}$/.test(phone)) {
+        errors.phone =
+          "Phone must contain exactly 10 digits.";
+      }
+
       if (!confirmPassword) {
         errors.confirmPassword =
           "Please confirm your password.";
@@ -211,9 +270,12 @@ export default function Login() {
     setFieldErrors(errors);
 
     return (
+      !errors.name &&
       !errors.username &&
       !errors.password &&
       !errors.confirmPassword &&
+      !errors.email &&
+      !errors.phone &&
       !errors.role
     );
   };
@@ -315,9 +377,12 @@ export default function Login() {
       }));
 
       setFieldErrors({
+        name: "",
         username: "",
         password: "",
         confirmPassword: "",
+        email: "",
+        phone: "",
         role: "",
       });
 
@@ -377,7 +442,10 @@ export default function Login() {
   ========================================================= */
 
   const handleSignUp = async () => {
+    const name = form.name.trim();
     const username = form.username.trim();
+    const email = form.email.trim();
+    const phone = form.phone.trim();
 
     try {
       setLoading(true);
@@ -385,16 +453,23 @@ export default function Login() {
       setSuccess("");
 
       /*
-       * IMPORTANT:
-       * Do NOT send role from the frontend.
+       * Backend registration requires:
+       * name
+       * username
+       * password
+       * email
+       * phone
        *
-       * Backend registration should always
-       * create a USER account.
+       * New registrations are always USER accounts.
        */
 
       await api.post("/auth/register", {
+        name,
         username,
         password: form.password,
+        email,
+        phone,
+        role: "USER",
       });
 
       setSuccess(
@@ -402,16 +477,22 @@ export default function Login() {
       );
 
       setForm({
+        name: "",
         username,
         password: "",
         confirmPassword: "",
+        email: "",
+        phone: "",
         role: "USER",
       });
 
       setFieldErrors({
+        name: "",
         username: "",
         password: "",
         confirmPassword: "",
+        email: "",
+        phone: "",
         role: "",
       });
 
@@ -419,8 +500,10 @@ export default function Login() {
        * Automatically switch back to Sign In
        * after successful registration.
        */
+
       setTimeout(() => {
         setIsSignUp(false);
+
         setSuccess(
           "Registration successful. Please sign in."
         );
@@ -924,7 +1007,89 @@ export default function Login() {
           noValidate
         >
 
-          {/* USERNAME */}
+          {/* =================================================
+              FULL NAME
+          ================================================= */}
+
+          {isSignUp && (
+            <TextField
+              fullWidth
+              label="Full name"
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              autoComplete="name"
+              disabled={loading}
+              placeholder="Enter your full name"
+              className="login-input"
+              error={Boolean(fieldErrors.name)}
+              helperText={fieldErrors.name}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonRounded className="login-input-icon" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          )}
+
+          {/* =================================================
+              EMAIL
+          ================================================= */}
+
+          {isSignUp && (
+            <TextField
+              fullWidth
+              label="Email"
+              name="email"
+              type="email"
+              value={form.email}
+              onChange={handleChange}
+              autoComplete="email"
+              disabled={loading}
+              placeholder="Enter your email"
+              className="login-input"
+              error={Boolean(fieldErrors.email)}
+              helperText={fieldErrors.email}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailRounded className="login-input-icon" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          )}
+
+          {/* =================================================
+              PHONE
+          ================================================= */}
+
+          {isSignUp && (
+            <TextField
+              fullWidth
+              label="Phone"
+              name="phone"
+              type="tel"
+              value={form.phone}
+              onChange={handleChange}
+              autoComplete="tel"
+              disabled={loading}
+              placeholder="Enter 10-digit phone number"
+              className="login-input"
+              error={Boolean(fieldErrors.phone)}
+              helperText={fieldErrors.phone}
+            />
+          )}
+
+          {/* =================================================
+              USERNAME
+          ================================================= */}
 
           <TextField
             fullWidth
@@ -933,7 +1098,7 @@ export default function Login() {
             value={form.username}
             onChange={handleChange}
             autoComplete="username"
-            autoFocus
+            autoFocus={!isSignUp}
             disabled={loading}
             placeholder="Enter your username"
             className="login-input"
@@ -968,7 +1133,9 @@ export default function Login() {
             }}
           />
 
-          {/* PASSWORD */}
+          {/* =================================================
+              PASSWORD
+          ================================================= */}
 
           <TextField
             fullWidth
@@ -1030,7 +1197,9 @@ export default function Login() {
             }}
           />
 
-          {/* CONFIRM PASSWORD */}
+          {/* =================================================
+              CONFIRM PASSWORD
+          ================================================= */}
 
           {isSignUp && (
             <TextField
@@ -1093,7 +1262,9 @@ export default function Login() {
             />
           )}
 
-          {/* REMEMBER + FORGOT */}
+          {/* =================================================
+              REMEMBER + FORGOT
+          ================================================= */}
 
           {!isSignUp && (
             <Box
@@ -1150,7 +1321,9 @@ export default function Login() {
             </Box>
           )}
 
-          {/* SUBMIT BUTTON */}
+          {/* =================================================
+              SUBMIT BUTTON
+          ================================================= */}
 
           <Button
             type="submit"
