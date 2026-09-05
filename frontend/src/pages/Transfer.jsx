@@ -188,6 +188,8 @@ function Transfer() {
             const data =
                 Array.isArray(response.data)
                     ? response.data
+                    : Array.isArray(response.data?.data)
+                    ? response.data.data
                     : [];
 
             setAccounts(data);
@@ -204,6 +206,7 @@ function Transfer() {
                 type: "error",
                 message:
                     error?.response?.data?.message ||
+                    error?.response?.data?.error ||
                     "Unable to load bank accounts.",
             });
 
@@ -374,17 +377,20 @@ function Transfer() {
         }
 
         /* -----------------------------------------------------
-           SAME ACCOUNT CHECK
+           SAME ACCOUNT NUMBER CHECK
         ----------------------------------------------------- */
 
+        const senderAccountNumber =
+            String(
+                fromAccount?.accountNumber ||
+                fromAccount?.accountNo ||
+                ""
+            ).trim();
+
         if (
-            fromAccount &&
+            senderAccountNumber &&
             accountNumber ===
-                String(
-                    fromAccount.accountNumber ||
-                    fromAccount.accountNo ||
-                    ""
-                )
+                senderAccountNumber
         ) {
 
             setToAccount(null);
@@ -432,48 +438,192 @@ function Transfer() {
                     "/accounts/lookup",
                     {
                         params: {
-                            accountNumber:
-                                accountNumber,
+                            accountNumber,
                         },
                     }
                 );
+
+            /* ---------------------------------------------------
+               DEBUG RESPONSE
+            --------------------------------------------------- */
+
+            console.log(
+                "Receiver lookup HTTP status:",
+                response.status
+            );
 
             console.log(
                 "Receiver API Response:",
                 response.data
             );
 
+            console.log(
+                "Receiver API Response type:",
+                typeof response.data
+            );
+
+            /* ---------------------------------------------------
+               SUPPORT BOTH RESPONSE FORMATS
+
+               FORMAT 1:
+               {
+                   id: 1,
+                   accountNumber: "...",
+                   status: "ACTIVE"
+               }
+
+               FORMAT 2:
+               {
+                   data: {
+                       id: 1,
+                       accountNumber: "...",
+                       status: "ACTIVE"
+                   }
+               }
+            --------------------------------------------------- */
+
             const receiver =
-                response.data;
+                response?.data?.data &&
+                typeof response.data.data === "object"
+                    ? response.data.data
+                    : response?.data;
+
+            console.log(
+                "Normalized receiver:",
+                receiver
+            );
 
             /* ---------------------------------------------------
                RESPONSE VALIDATION
             --------------------------------------------------- */
 
-            if (!receiver) {
+            if (
+                !receiver ||
+                typeof receiver !== "object"
+            ) {
                 throw new Error(
-                    "Receiver account not found."
+                    "Receiver account was not found."
                 );
             }
+
+            /* ---------------------------------------------------
+               ID VALIDATION
+            --------------------------------------------------- */
+
+            if (
+                receiver.id === undefined ||
+                receiver.id === null
+            ) {
+                console.error(
+                    "Receiver response does not contain id:",
+                    receiver
+                );
+
+                throw new Error(
+                    "Receiver account information is incomplete."
+                );
+            }
+
+            /* ---------------------------------------------------
+               ACCOUNT NUMBER VALIDATION
+            --------------------------------------------------- */
+
+            const receiverNumber =
+                String(
+                    receiver.accountNumber ||
+                    receiver.accountNo ||
+                    ""
+                ).trim();
+
+            if (!receiverNumber) {
+
+                console.error(
+                    "Receiver response does not contain account number:",
+                    receiver
+                );
+
+                throw new Error(
+                    "Receiver account number was not returned by the server."
+                );
+            }
+
+            /* ---------------------------------------------------
+               OPTIONAL: VERIFY RETURNED NUMBER MATCHES
+               REQUESTED NUMBER
+            --------------------------------------------------- */
+
+            if (
+                receiverNumber !==
+                accountNumber
+            ) {
+
+                console.error(
+                    "Requested account number:",
+                    accountNumber
+                );
+
+                console.error(
+                    "Returned account number:",
+                    receiverNumber
+                );
+
+                throw new Error(
+                    "The server returned a different account number."
+                );
+            }
+
+            /* ---------------------------------------------------
+               DEBUG RECEIVER
+            --------------------------------------------------- */
+
+            console.log(
+                "Receiver ID:",
+                receiver.id
+            );
+
+            console.log(
+                "Receiver Account Number:",
+                receiverNumber
+            );
+
+            console.log(
+                "Receiver Customer:",
+                receiver.customerName ||
+                receiver.customer?.name ||
+                receiver.name
+            );
+
+            console.log(
+                "Receiver Status:",
+                receiver.status
+            );
 
             /* ---------------------------------------------------
                ACTIVE ACCOUNT CHECK
             --------------------------------------------------- */
 
-            if (
-                receiver.status &&
-                receiver.status !== "ACTIVE"
-            ) {
+            if (receiver.status) {
 
-                setToAccount(null);
+                const receiverStatus =
+                    String(
+                        receiver.status
+                    ).trim().toUpperCase();
 
-                setErrors((current) => ({
-                    ...current,
-                    toAccount:
-                        "Receiver account is not active.",
-                }));
+                if (
+                    receiverStatus !==
+                    "ACTIVE"
+                ) {
 
-                return;
+                    setToAccount(null);
+
+                    setErrors((current) => ({
+                        ...current,
+                        toAccount:
+                            "Receiver account is not active.",
+                    }));
+
+                    return;
+                }
             }
 
             /* ---------------------------------------------------
@@ -498,10 +648,27 @@ function Transfer() {
             }
 
             /* ---------------------------------------------------
+               NORMALIZE RECEIVER OBJECT
+            --------------------------------------------------- */
+
+            const normalizedReceiver = {
+                ...receiver,
+
+                accountNumber:
+                    receiverNumber,
+
+                status:
+                    receiver.status ||
+                    "ACTIVE",
+            };
+
+            /* ---------------------------------------------------
                SUCCESS
             --------------------------------------------------- */
 
-            setToAccount(receiver);
+            setToAccount(
+                normalizedReceiver
+            );
 
             setErrors((current) => ({
                 ...current,
@@ -516,36 +683,70 @@ function Transfer() {
             });
 
             console.log(
-                "Receiver verified:",
-                receiver
+                "========== RECEIVER VERIFIED =========="
             );
 
             console.log(
-                "======================================"
+                "Verified receiver:",
+                normalizedReceiver
+            );
+
+            console.log(
+                "======================================="
             );
 
         } catch (error) {
 
             console.error(
-                "Receiver lookup failed:",
+                "========== RECEIVER LOOKUP FAILED =========="
+            );
+
+            console.error(
+                "HTTP Status:",
+                error?.response?.status
+            );
+
+            console.error(
+                "Backend Response:",
+                error?.response?.data
+            );
+
+            console.error(
+                "Backend Message:",
+                error?.response?.data?.message
+            );
+
+            console.error(
+                "Full Error:",
                 error
             );
 
             console.error(
-                "Response:",
-                error?.response?.data
+                "============================================"
             );
+
+            const backendData =
+                error?.response?.data;
+
+            const backendMessage =
+                typeof backendData === "string"
+                    ? backendData
+                    : backendData?.message ||
+                      backendData?.error ||
+                      backendData?.detail ||
+                      error?.message ||
+                      "Receiver account not found.";
 
             setToAccount(null);
 
             setErrors((current) => ({
                 ...current,
                 toAccount:
-                    error?.response?.data?.message ||
-                    "Receiver account not found.",
+                    backendMessage,
             }));
 
         } finally {
+
             setLoadingReceiver(false);
         }
     };
@@ -848,6 +1049,25 @@ function Transfer() {
 
             setProcessing(true);
 
+            console.log(
+                "========== TRANSFER REQUEST =========="
+            );
+
+            console.log({
+                fromAccountId:
+                    Number(
+                        fromAccount.id
+                    ),
+
+                toAccountId:
+                    Number(
+                        toAccount.id
+                    ),
+
+                amount:
+                    Number(amount),
+            });
+
             const response =
                 await api.post(
                     "/accounts/transfer",
@@ -866,6 +1086,15 @@ function Transfer() {
                             Number(amount),
                     }
                 );
+
+            console.log(
+                "Transfer response:",
+                response.data
+            );
+
+            console.log(
+                "======================================"
+            );
 
             setResult(
                 response.data || null
@@ -887,19 +1116,46 @@ function Transfer() {
         } catch (error) {
 
             console.error(
-                "Transfer failed:",
+                "========== TRANSFER FAILED =========="
+            );
+
+            console.error(
+                "HTTP Status:",
+                error?.response?.status
+            );
+
+            console.error(
+                "Backend Response:",
+                error?.response?.data
+            );
+
+            console.error(
+                "Full Error:",
                 error
             );
 
+            console.error(
+                "====================================="
+            );
+
             setConfirmOpen(false);
+
+            const backendData =
+                error?.response?.data;
+
+            const backendMessage =
+                typeof backendData === "string"
+                    ? backendData
+                    : backendData?.message ||
+                      backendData?.error ||
+                      backendData?.detail ||
+                      "Transfer failed. Please verify the account details and available balance.";
 
             setNotification({
                 open: true,
                 type: "error",
                 message:
-                    error?.response?.data?.message ||
-                    error?.response?.data?.error ||
-                    "Transfer failed. Please verify the account details and available balance.",
+                    backendMessage,
             });
 
         } finally {
