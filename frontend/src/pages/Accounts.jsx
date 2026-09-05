@@ -66,6 +66,7 @@ const getCustomerName = (account) => {
     account?.customer?.name ||
     account?.customer?.fullName ||
     account?.customerName ||
+    account?.accountHolderName ||
     "N/A"
   );
 };
@@ -140,11 +141,7 @@ function Accounts() {
   const [accountNumber, setAccountNumber] = useState("");
   const [accountType, setAccountType] = useState("SAVINGS");
   const [balance, setBalance] = useState("");
-
-  // NEW
   const [accountHolderName, setAccountHolderName] = useState("");
-
-  // Internal customer ID used by backend
   const [customerId, setCustomerId] = useState("");
 
   /* =======================================================
@@ -317,10 +314,12 @@ function Accounts() {
       return false;
     }
 
-    if (
-      !accountNumber.trim() ||
-      accountNumber.trim().length < 3
-    ) {
+    if (!accountNumber.trim()) {
+      setError("Account number is required.");
+      return false;
+    }
+
+    if (accountNumber.trim().length < 3) {
       setError(
         "Account number must be at least 3 characters."
       );
@@ -331,6 +330,7 @@ function Accounts() {
     const parsedBalance = Number(balance);
 
     if (
+      balance === "" ||
       Number.isNaN(parsedBalance) ||
       parsedBalance < 0
     ) {
@@ -351,7 +351,7 @@ function Accounts() {
 
     if (!matchedCustomer) {
       setError(
-        `No customer found with the name "${accountHolderName}". Please enter the exact customer name.`
+        `No customer found with the name "${accountHolderName}". Please enter the exact registered customer name.`
       );
 
       return false;
@@ -400,8 +400,14 @@ function Accounts() {
     try {
       const payload = {
         accountNumber: accountNumber.trim(),
+
+        accountHolderName:
+          accountHolderName.trim(),
+
         accountType: accountType,
-        balance: Number(balance),
+
+        initialBalance: Number(balance),
+
         customerId: Number(matchedCustomer.id),
       };
 
@@ -539,11 +545,15 @@ function Accounts() {
     try {
       const payload = {
         accountNumber: accountNumber.trim(),
+
+        accountHolderName:
+          accountHolderName.trim(),
+
         accountType: accountType,
-        balance: Number(balance),
-        customer: {
-          id: Number(matchedCustomer.id),
-        },
+
+        initialBalance: Number(balance),
+
+        customerId: Number(matchedCustomer.id),
       };
 
       console.log(
@@ -1100,7 +1110,6 @@ function Accounts() {
           ================================================= */}
 
           <Stack spacing={3}>
-
             {/* =================================================
                 CREATE / EDIT FORM
             ================================================= */}
@@ -1255,9 +1264,7 @@ function Accounts() {
                         sx={inputStyles}
                       />
 
-                      {/* =================================================
-                          ACCOUNT HOLDER NAME
-                      ================================================= */}
+                      {/* ACCOUNT HOLDER NAME */}
 
                       <TextField
                         fullWidth
@@ -1269,8 +1276,6 @@ function Accounts() {
                             event.target.value
                           );
 
-                          // Clear previous ID when
-                          // user changes the name.
                           setCustomerId("");
                         }}
                         disabled={
@@ -1343,9 +1348,7 @@ function Accounts() {
                       />
                     </Box>
 
-                    {/* =================================================
-                        BUTTONS
-                    ================================================= */}
+                    {/* BUTTONS */}
 
                     <Stack
                       direction={{
@@ -2538,4 +2541,3 @@ const inputStyles = {
 };
 
 export default Accounts;
-
