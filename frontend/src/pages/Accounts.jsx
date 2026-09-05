@@ -58,11 +58,7 @@ const formatCurrency = (value) => {
 };
 
 const getCustomerId = (account) => {
-  return (
-    account?.customer?.id ??
-    account?.customerId ??
-    null
-  );
+  return account?.customer?.id ?? account?.customerId ?? null;
 };
 
 const getCustomerName = (account) => {
@@ -75,20 +71,39 @@ const getCustomerName = (account) => {
 };
 
 const getCustomerEmail = (account) => {
-  return (
-    account?.customer?.email ||
-    account?.customerEmail ||
-    "N/A"
-  );
+  return account?.customer?.email || account?.customerEmail || "N/A";
 };
 
 const getAccountType = (account) => {
-  return (
-    account?.accountType ||
-    account?.type ||
-    "N/A"
-  );
+  return account?.accountType || account?.type || "N/A";
 };
+
+/* =========================================================
+   CUSTOMER NAME HELPER
+========================================================= */
+
+const getCustomerNameFromCustomer = (customer) => {
+  if (!customer) {
+    return "";
+  }
+
+  if (customer.name) {
+    return String(customer.name);
+  }
+
+  if (customer.fullName) {
+    return String(customer.fullName);
+  }
+
+  const firstName = customer.firstName || "";
+  const lastName = customer.lastName || "";
+
+  return `${firstName} ${lastName}`.trim();
+};
+
+/* =========================================================
+   CURRENT USER ROLE
+========================================================= */
 
 const getCurrentUserRole = () => {
   try {
@@ -105,10 +120,7 @@ const getCurrentUserRole = () => {
       .toUpperCase()
       .replace(/^ROLE_/, "");
   } catch (error) {
-    console.error(
-      "Failed to read current user role:",
-      error
-    );
+    console.error("Failed to read current user role:", error);
 
     return "USER";
   }
@@ -121,11 +133,30 @@ const getCurrentUserRole = () => {
 function Accounts() {
   const [accounts, setAccounts] = useState([]);
 
+  /* =======================================================
+     FORM STATE
+  ======================================================= */
+
   const [accountNumber, setAccountNumber] = useState("");
-  const [accountType, setAccountType] =
-    useState("SAVINGS");
+  const [accountType, setAccountType] = useState("SAVINGS");
   const [balance, setBalance] = useState("");
+
+  // NEW
+  const [accountHolderName, setAccountHolderName] = useState("");
+
+  // Internal customer ID used by backend
   const [customerId, setCustomerId] = useState("");
+
+  /* =======================================================
+     CUSTOMERS
+  ======================================================= */
+
+  const [customers, setCustomers] = useState([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+
+  /* =======================================================
+     GENERAL STATE
+  ======================================================= */
 
   const [editingId, setEditingId] = useState(null);
 
@@ -137,17 +168,13 @@ function Accounts() {
 
   const [search, setSearch] = useState("");
 
-  const [deleteDialogOpen, setDeleteDialogOpen] =
-    useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const [accountToDelete, setAccountToDelete] =
-    useState(null);
+  const [accountToDelete, setAccountToDelete] = useState(null);
 
-  const [detailsOpen, setDetailsOpen] =
-    useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const [selectedAccount, setSelectedAccount] =
-    useState(null);
+  const [selectedAccount, setSelectedAccount] = useState(null);
 
   const [toast, setToast] = useState({
     open: false,
@@ -155,16 +182,20 @@ function Accounts() {
     message: "",
   });
 
-  const isAdmin =
-    getCurrentUserRole() === "ADMIN";
+  const isAdmin = getCurrentUserRole() === "ADMIN";
 
   /* =======================================================
-     LOAD ACCOUNTS
+     LOAD DATA
   ======================================================= */
 
   useEffect(() => {
     loadAccounts();
+    loadCustomers();
   }, []);
+
+  /* =======================================================
+     LOAD ACCOUNTS
+  ======================================================= */
 
   const loadAccounts = async () => {
     setLoading(true);
@@ -179,10 +210,7 @@ function Accounts() {
 
       setAccounts(data);
     } catch (err) {
-      console.error(
-        "Failed to load accounts:",
-        err
-      );
+      console.error("Failed to load accounts:", err);
 
       setError(
         err?.response?.data?.message ||
@@ -191,6 +219,33 @@ function Accounts() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  /* =======================================================
+     LOAD CUSTOMERS
+  ======================================================= */
+
+  const loadCustomers = async () => {
+    setCustomersLoading(true);
+
+    try {
+      const response = await api.get("/customers");
+
+      const data = Array.isArray(response.data)
+        ? response.data
+        : [];
+
+      setCustomers(data);
+    } catch (err) {
+      console.error("Failed to load customers:", err);
+
+      showToast(
+        "error",
+        "Unable to load customers. Account holder selection may not work."
+      );
+    } finally {
+      setCustomersLoading(false);
     }
   };
 
@@ -214,8 +269,34 @@ function Accounts() {
     setAccountNumber("");
     setAccountType("SAVINGS");
     setBalance("");
+    setAccountHolderName("");
     setCustomerId("");
     setEditingId(null);
+  };
+
+  /* =======================================================
+     FIND CUSTOMER BY NAME
+  ======================================================= */
+
+  const findCustomerByName = (name) => {
+    const normalizedName = String(name || "")
+      .trim()
+      .toLowerCase();
+
+    if (!normalizedName) {
+      return null;
+    }
+
+    return (
+      customers.find((customer) => {
+        const customerName =
+          getCustomerNameFromCustomer(customer)
+            .trim()
+            .toLowerCase();
+
+        return customerName === normalizedName;
+      }) || null
+    );
   };
 
   /* =======================================================
@@ -260,25 +341,29 @@ function Accounts() {
       return false;
     }
 
-    const parsedCustomer = Number(customerId);
+    if (!accountHolderName.trim()) {
+      setError("Account holder name is required.");
+      return false;
+    }
 
-    if (
-      Number.isNaN(parsedCustomer) ||
-      !Number.isInteger(parsedCustomer) ||
-      parsedCustomer <= 0
-    ) {
+    const matchedCustomer =
+      findCustomerByName(accountHolderName);
+
+    if (!matchedCustomer) {
       setError(
-        "Customer ID must be a positive integer."
+        `No customer found with the name "${accountHolderName}". Please enter the exact customer name.`
       );
 
       return false;
     }
 
+    setCustomerId(String(matchedCustomer.id));
+
     return true;
   };
 
   /* =======================================================
-     CREATE
+     CREATE ACCOUNT
   ======================================================= */
 
   const handleCreateAccount = async (event) => {
@@ -299,6 +384,17 @@ function Accounts() {
       return;
     }
 
+    const matchedCustomer =
+      findCustomerByName(accountHolderName);
+
+    if (!matchedCustomer) {
+      setError(
+        "Customer not found. Please enter a valid account holder name."
+      );
+
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -306,7 +402,7 @@ function Accounts() {
         accountNumber: accountNumber.trim(),
         accountType: accountType,
         balance: Number(balance),
-        customerId: Number(customerId),
+        customerId: Number(matchedCustomer.id),
       };
 
       console.log(
@@ -354,7 +450,7 @@ function Accounts() {
   };
 
   /* =======================================================
-     EDIT
+     EDIT ACCOUNT
   ======================================================= */
 
   const handleEdit = (account) => {
@@ -383,8 +479,17 @@ function Accounts() {
       String(account.balance ?? "")
     );
 
+    const existingCustomerId =
+      getCustomerId(account);
+
     setCustomerId(
-      String(getCustomerId(account) ?? "")
+      String(existingCustomerId ?? "")
+    );
+
+    setAccountHolderName(
+      getCustomerName(account) === "N/A"
+        ? ""
+        : getCustomerName(account)
     );
 
     setMessage("");
@@ -397,7 +502,7 @@ function Accounts() {
   };
 
   /* =======================================================
-     UPDATE
+     UPDATE ACCOUNT
   ======================================================= */
 
   const handleUpdateAccount = async (event) => {
@@ -418,6 +523,17 @@ function Accounts() {
       return;
     }
 
+    const matchedCustomer =
+      findCustomerByName(accountHolderName);
+
+    if (!matchedCustomer) {
+      setError(
+        "Customer not found. Please enter a valid account holder name."
+      );
+
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -426,7 +542,7 @@ function Accounts() {
         accountType: accountType,
         balance: Number(balance),
         customer: {
-          id: Number(customerId),
+          id: Number(matchedCustomer.id),
         },
       };
 
@@ -835,8 +951,15 @@ function Accounts() {
             <Button
               variant="outlined"
               startIcon={<Refresh />}
-              onClick={loadAccounts}
-              disabled={loading || submitting}
+              onClick={() => {
+                loadAccounts();
+                loadCustomers();
+              }}
+              disabled={
+                loading ||
+                submitting ||
+                customersLoading
+              }
               sx={{
                 height: 42,
                 borderRadius: 2,
@@ -978,7 +1101,9 @@ function Accounts() {
 
           <Stack spacing={3}>
 
-            {/* FORM - ADMIN ONLY */}
+            {/* =================================================
+                CREATE / EDIT FORM
+            ================================================= */}
 
             {isAdmin && (
               <Card
@@ -1049,7 +1174,7 @@ function Accounts() {
                       >
                         {editingId
                           ? "Update the account information below."
-                          : "Enter the account and customer information."}
+                          : "Enter the account and account holder information."}
                       </Typography>
                     </Box>
                   </Stack>
@@ -1073,7 +1198,6 @@ function Accounts() {
                         gap: 2,
                       }}
                     >
-
                       {/* ACCOUNT TYPE */}
 
                       <TextField
@@ -1131,24 +1255,34 @@ function Accounts() {
                         sx={inputStyles}
                       />
 
-                      {/* CUSTOMER ID */}
+                      {/* =================================================
+                          ACCOUNT HOLDER NAME
+                      ================================================= */}
 
                       <TextField
                         fullWidth
-                        label="Customer ID"
-                        type="number"
-                        inputProps={{
-                          min: 1,
-                        }}
-                        placeholder="Example: 2"
-                        value={customerId}
-                        onChange={(event) =>
-                          setCustomerId(
+                        label="Account Holder Name"
+                        placeholder="Example: Tushar Khatik"
+                        value={accountHolderName}
+                        onChange={(event) => {
+                          setAccountHolderName(
                             event.target.value
-                          )
+                          );
+
+                          // Clear previous ID when
+                          // user changes the name.
+                          setCustomerId("");
+                        }}
+                        disabled={
+                          submitting ||
+                          customersLoading
                         }
-                        disabled={submitting}
                         required
+                        helperText={
+                          customersLoading
+                            ? "Loading customers..."
+                            : "Enter the exact registered customer name"
+                        }
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
@@ -1207,8 +1341,11 @@ function Accounts() {
                             },
                         }}
                       />
-
                     </Box>
+
+                    {/* =================================================
+                        BUTTONS
+                    ================================================= */}
 
                     <Stack
                       direction={{
@@ -1259,7 +1396,10 @@ function Accounts() {
                             <Add />
                           )
                         }
-                        disabled={submitting}
+                        disabled={
+                          submitting ||
+                          customersLoading
+                        }
                         sx={{
                           minHeight: 48,
                           flex: 1,
@@ -1288,7 +1428,9 @@ function Accounts() {
               </Card>
             )}
 
-            {/* ACCOUNT LIST */}
+            {/* =================================================
+                ACCOUNT LIST
+            ================================================= */}
 
             <Card
               sx={{
@@ -1470,7 +1612,6 @@ function Accounts() {
           ================================================= */}
 
           <Stack spacing={2.5}>
-
             <Card
               sx={{
                 borderRadius: 3,
@@ -1595,7 +1736,6 @@ function Accounts() {
                 </Stack>
               </CardContent>
             </Card>
-
           </Stack>
         </Box>
       </Box>
@@ -1633,9 +1773,7 @@ function Accounts() {
             </Avatar>
 
             <Box>
-              <Typography
-                fontWeight={900}
-              >
+              <Typography fontWeight={900}>
                 Delete Account
               </Typography>
 
@@ -1751,9 +1889,7 @@ function Accounts() {
             </Avatar>
 
             <Box>
-              <Typography
-                fontWeight={900}
-              >
+              <Typography fontWeight={900}>
                 Account Details
               </Typography>
 
@@ -1770,7 +1906,6 @@ function Accounts() {
         <DialogContent sx={{ p: 3 }}>
           {selectedAccount && (
             <Stack spacing={0}>
-
               <DetailRow
                 label="Account Number"
                 value={
@@ -1780,18 +1915,14 @@ function Accounts() {
 
               <DetailRow
                 label="Account Type"
-                value={
-                  getAccountType(
-                    selectedAccount
-                  )
-                }
+                value={getAccountType(
+                  selectedAccount
+                )}
               />
 
               <DetailRow
                 label="Account ID"
-                value={
-                  selectedAccount.id
-                }
+                value={selectedAccount.id}
               />
 
               <DetailRow
@@ -1800,6 +1931,13 @@ function Accounts() {
                   selectedAccount.balance
                 )}
                 highlight
+              />
+
+              <DetailRow
+                label="Account Holder Name"
+                value={getCustomerName(
+                  selectedAccount
+                )}
               />
 
               <DetailRow
@@ -1812,19 +1950,11 @@ function Accounts() {
               />
 
               <DetailRow
-                label="Customer Name"
-                value={getCustomerName(
-                  selectedAccount
-                )}
-              />
-
-              <DetailRow
                 label="Customer Email"
                 value={getCustomerEmail(
                   selectedAccount
                 )}
               />
-
             </Stack>
           )}
         </DialogContent>
@@ -1940,6 +2070,8 @@ function AccountRow({
           },
         }}
       >
+        {/* ACCOUNT */}
+
         <Stack
           direction="row"
           spacing={1.5}
@@ -2069,12 +2201,12 @@ function AccountRow({
           </Typography>
         </Box>
 
-        {/* CUSTOMER */}
+        {/* CUSTOMER / ACCOUNT HOLDER */}
 
         <Box
           sx={{
             minWidth: {
-              md: 170,
+              md: 190,
             },
           }}
         >
@@ -2082,7 +2214,7 @@ function AccountRow({
             variant="caption"
             color="#667085"
           >
-            CUSTOMER
+            ACCOUNT HOLDER
           </Typography>
 
           <Typography
@@ -2406,3 +2538,4 @@ const inputStyles = {
 };
 
 export default Accounts;
+
